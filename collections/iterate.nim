@@ -1,6 +1,5 @@
 import collections/base
-import macros
-import options
+import macros, options, algorithm
 
 macro multifuncIterator*(b): stmt =
   ## Iterator that is closure and inline at the same time, depending on the context.
@@ -95,6 +94,10 @@ iterator grouping*[T](it: Iterator[T], n: int, discardLast=false): seq[T] {.mult
   if s.len != 0 and not discardLast:
     yield s
 
+iterator map*[T; R](coll: Iterable[T], f: (proc(item: T): R)): R {.multifuncIterator.} =
+  for item in coll:
+    yield f(item)
+
 iterator flatMap*[T; R](coll: seq[T], f: (proc(item: T): seq[R])): R {.multifuncIterator.} =
   for item in coll:
     let rets = f(item)
@@ -157,7 +160,24 @@ proc reversed*[T](s: seq[T]): seq[T] =
   for i in 0..<(result.len div 2):
     swap(result[i], result[result.len - i - 1])
 
-proc toSeq*[T](s: Iterable[T]): seq[T] =
+proc all*(i: Iterable[bool]): bool =
+  ## Returns true iff all items in i are true.
+  result = true
+  for item in i:
+    result = result and item
+
+# this should be called any, but the name is already used
+proc someTrue*(i: Iterable[bool]): bool =
+  ## Returns true iff some item in i is true.
+  result = false
+  for item in i:
+    result = result or item
+
+proc sorted*[T](i: Iterable[T]): seq[T] =
+  result = i.toSeq
+  sort(result, cmp[T])
+
+converter toSeq*[T](s: Iterable[T]): seq[T] =
   result = @[]
   for item in s:
     result.add item
