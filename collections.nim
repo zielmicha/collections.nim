@@ -16,5 +16,9 @@ export iterate.takeWhile
 export iterate.toSeq
 export iterate.unzip
 export iterate.zip
+import collections/misc
+export misc.default
+export misc.keys
+export misc.toCounter
 import future
 export future.`=>`, future.`->`

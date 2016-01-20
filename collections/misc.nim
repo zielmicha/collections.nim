@@ -11,3 +11,6 @@ proc keys*[A, B](s: Table[A, B]): Iterator[A] =
   return iterator(): A =
     for i in s.keys:
       yield i
+
+proc default*[T](t: typedesc[T]): T =
+  discard
