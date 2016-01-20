@@ -13,5 +13,8 @@ export iterate.reversed
 export iterate.someTrue
 export iterate.sorted
 export iterate.takeWhile
+export iterate.toSeq
 export iterate.unzip
 export iterate.zip
+import future
+export future.`=>`, future.`->`

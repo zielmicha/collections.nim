@@ -43,7 +43,7 @@ type
 template wrapIterable*(typ): stmt =
   ## Creates closure version of `items` for type that already has `inline` version.
   converter items*[T](s: typ[T]): Iterator[T] =
-    return iterator(): T =
+    return iterator(): T {.closure.} =
       for i in s:
         yield i
 
@@ -173,14 +173,20 @@ proc someTrue*(i: Iterable[bool]): bool =
   for item in i:
     result = result or item
 
-proc sorted*[T](i: Iterable[T]): seq[T] =
-  result = i.toSeq
-  sort(result, cmp[T])
+template iteratorToSeq*(iter: expr): expr {.immediate.} =
+  var res: seq[type(iter)] = @[]
+  for x in iter:
+    res.add(x)
+  res
 
 converter toSeq*[T](s: Iterable[T]): seq[T] =
   result = @[]
-  for item in s:
+  for item in s.items:
     result.add item
+
+proc sorted*[T](i: Iterable[T]): seq[T] =
+  result = i.toSeq
+  sort(result, cmp[T])
 
 when isMainModule:
   iterator foo(foo: int): int {.multifuncIterator.} =
