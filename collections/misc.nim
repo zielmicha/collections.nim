@@ -14,3 +14,6 @@ proc keys*[A, B](s: Table[A, B]): Iterator[A] =
 
 proc default*[T](t: typedesc[T]): T =
   discard
+
+proc initTable*[K, V](t: var Table[K, V]) =
+  t = initTable[K, V]()

@@ -188,6 +188,12 @@ proc sorted*[T](i: Iterable[T]): seq[T] =
   result = i.toSeq
   sort(result, cmp[T])
 
+proc findOne*[T](i: Iterable[T], function: (proc(t: T): bool)): Option[T] =
+  for item in i:
+    if function(item):
+      return some(item)
+  return none(T)
+
 when isMainModule:
   iterator foo(foo: int): int {.multifuncIterator.} =
      yield foo

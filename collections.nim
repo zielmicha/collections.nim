@@ -2,6 +2,7 @@ import collections/iterate
 export iterate.all
 export iterate.dropWhile
 export iterate.filter
+export iterate.findOne
 export iterate.flatMap
 export iterate.flatten
 export iterate.grouping
@@ -18,7 +19,10 @@ export iterate.unzip
 export iterate.zip
 import collections/misc
 export misc.default
+export misc.initTable
 export misc.keys
 export misc.toCounter
 import future
 export future.`=>`, future.`->`
+import options
+export options.Option, options.some, options.none, options.isSome, options.isNone, options.get

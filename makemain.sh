@@ -6,5 +6,7 @@ names="iterate misc"
 done; cat <<'EOF'
 import future
 export future.`=>`, future.`->`
+import options
+export options.Option, options.some, options.none, options.isSome, options.isNone, options.get
 EOF
 ) > collections.nim
