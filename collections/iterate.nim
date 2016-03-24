@@ -5,9 +5,10 @@ macro multifuncIterator*(b): stmt =
   ## Iterator that is closure and inline at the same time, depending on the context.
   ##
   ## Example:
-  ## ```
-  ## iterator foo(): int {.multifuncIterator.} =
-  ##   yield 5
+  ##
+  ## .. code-block::
+  ##   iterator foo(): int {.multifuncIterator.} =
+  ##     yield 5
   ## ```
   result = newStmtList()
   # FIXME: if we enable this compiler fails on "var s = result.sons[namePos].sym" in semstmts.nim
