@@ -1,28 +1,8 @@
-import collections/iterate
-export iterate.all
-export iterate.dropWhile
-export iterate.filter
-export iterate.findOne
-export iterate.flatMap
-export iterate.flatten
-export iterate.grouping
-export iterate.items
-export iterate.map
-export iterate.next
-export iterate.range
-export iterate.reversed
-export iterate.someTrue
-export iterate.sorted
-export iterate.takeWhile
-export iterate.toSeq
-export iterate.unzip
-export iterate.zip
-import collections/misc
-export misc.default
-export misc.initTable
-export misc.keys
-export misc.toCounter
+import collections/bytes, collections/random, collections/lang, collections/misc
+export bytes, random, lang, misc
+
 import future
 export future.`=>`, future.`->`
+
 import options
 export options.Option, options.some, options.none, options.isSome, options.isNone, options.get

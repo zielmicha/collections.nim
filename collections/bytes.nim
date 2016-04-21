@@ -1,4 +1,4 @@
-import endians
+import endians, strutils
 
 proc byteArray*(data: string, size: static[int]): array[size, byte] =
   ## Converts a string to a bytearray.
@@ -61,3 +61,28 @@ proc unpackStruct*[T](v: string, t: typedesc[T]): T {.inline.} =
   if v.len < sizeof(T):
     raise newException(ValueError, "buffer too small")
   copyMem(addr result, unsafeAddr v[0], sizeof(T))
+
+# HEX
+
+const hexLetters = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f']
+
+proc encodeHex*(s: string): string =
+  result = ""
+  result.setLen(s.len * 2)
+  for i in 0..s.len-1:
+    var a = ord(s[i]) shr 4
+    var b = ord(s[i]) and ord(0x0f)
+    result[i * 2] = hexLetters[a]
+    result[i * 2 + 1] = hexLetters[b]
+
+proc decodeHex*(s: string): string =
+  if s.len mod 2 == 1: raise newException(ValueError, "odd-length string")
+  let s = s.toLower
+
+  result = newString(int(s.len / 2))
+  for i in 0..<int(s.len/2):
+    let a = find(hexLetters, s[i * 2])
+    let b = find(hexLetters, s[i * 2 + 1])
+    if a == -1 or b == -1:
+      raise newException(ValueError, "invalid hex digit")
+    result[i] = char((a shl 4) or b)
