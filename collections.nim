@@ -5,4 +5,7 @@ import future
 export future.`=>`, future.`->`
 
 import options
-export options.Option, options.some, options.none, options.isSome, options.isNone, options.get
+export options
+
+import tables, strutils
+export tables, strutils
