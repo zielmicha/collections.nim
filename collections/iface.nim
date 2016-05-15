@@ -120,11 +120,11 @@ macro defiface*(name: untyped, body: untyped): stmt {.immediate.} =
     proc initVtableFor[T](impl: typedesc[T], iface: typedesc[`iname`]): `vtableName` =
       `vtableInitBody`
 
-    proc getVtableFor[T](impl: typedesc[T], t: typedesc[`iname`]): `vtableName` {.inline.} =
+    proc getVtableFor*[T](impl: typedesc[T], t: typedesc[`iname`]): `vtableName` {.inline.} =
       var vtable {.global.} = initVtableFor(T, `iname`)
       return vtable
 
-    proc `converterName`*(a: `name`): `iname` =
+    proc `converterName`*(a: any): `iname` =
       var res: `iname`
       res.vtable = getVtableFor(type(a), `iname`)
       res.obj = cast[RootRef](a)
