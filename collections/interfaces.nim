@@ -1,5 +1,7 @@
-import collections/misc
-import macros, strutils, typetraits
+import collections/misc, collections/gcptr, collections/reflect
+import macros, strutils, typetraits, algorithm
+
+export SomeGcPtr
 
 macro defiface*(name: untyped, body: untyped): stmt {.immediate.} =
   let nameStr = $name.ident
@@ -11,17 +13,22 @@ macro defiface*(name: untyped, body: untyped): stmt {.immediate.} =
                                            newNimNode(nnkRefTy)))
   let vtableBody = quote do:
     type `vtableName`* = ref object
-      discard
+      vtypeId: TypeId # there are problems with using symbols that are already procs
+
   let vtableInner = vtableBody[0][0][2][0][2]
-  vtableInner.del(0)
+  # vtableInner.del(0)
   let vtableInitBody = newNimNode(nnkStmtList)
   vtableInitBody.add(newNimNode(nnkLetSection).add(
     newNimNode(nnkIdentDefs).add(newIdentNode("res"), newEmptyNode(),
                                  newCall(bindSym"new", vtableName))))
+  vtableInitBody.add quote do:
+    res.vtypeId = typeid(T)
+
   let callWrappers = newNimNode(nnkStmtList)
 
   for arg in body:
     if arg.kind == nnkCall:
+      arg.treeRepr.echo
       let left = arg[0]
       var funcName: NimNode
       var args: NimNode
@@ -34,8 +41,11 @@ macro defiface*(name: untyped, body: untyped): stmt {.immediate.} =
       elif left.kind == nnkIdent:
         funcName = left
         args = newNimNode(nnkStmtList)
+      elif left.kind == nnkCall and left.len == 1:
+        funcName = left[0]
+        args = newNimNode(nnkStmtList)
       else:
-        error("invalid declaration")
+        error("invalid declaration " & $left.kind)
 
       funcName = newIdentNode($funcName.ident)
 
@@ -53,7 +63,7 @@ macro defiface*(name: untyped, body: untyped): stmt {.immediate.} =
 
       # Generate vtable type
       let vtableArgs = newNimNode(nnkFormalParams).add(ret)
-      vtableArgs.add(newNimNode(nnkIdentDefs).add(newIdentNode(!"self"), newIdentNode(!"RootRef"), newEmptyNode()))
+      vtableArgs.add(newNimNode(nnkIdentDefs).add(newIdentNode(!"self"), newIdentNode(!"SomeGcPtr"), newEmptyNode()))
       for arg in args:
         vtableArgs.add(newNimNode(nnkIdentDefs).add(arg[0], arg[1], newEmptyNode()))
 
@@ -64,9 +74,9 @@ macro defiface*(name: untyped, body: untyped): stmt {.immediate.} =
 
       # Generate vtable body
       let vtableFunc = quote do:
-        res.`funcName` = proc(self: RootRef): void {.cdecl.} =
+        res.`funcName` = proc(self: SomeGcPtr): void {.cdecl.} =
                                 mixin funcName
-                                funcName(cast[T](self))
+                                funcName(self.unwrap(T))
 
       let vtableFuncBody = vtableFunc[0][1]
 
@@ -100,7 +110,7 @@ macro defiface*(name: untyped, body: untyped): stmt {.immediate.} =
     elif arg.kind == nnkCommand:
       discard
     else:
-      error("invalid statement in interface specification")
+      error("invalid statement in interface specification: " & $arg.kind)
 
   let converterName = newIdentNode("asI" & nameStr)
   vtableInitBody.add(newNimNode(nnkReturnStmt).add(newIdentNode("res")))
@@ -114,7 +124,7 @@ macro defiface*(name: untyped, body: untyped): stmt {.immediate.} =
 
     type
       `iname`* = object
-        obj: RootRef
+        obj: SomeGcPtr
         vtable: `vtableName`
 
     proc initVtableFor[T](impl: typedesc[T], iface: typedesc[`iname`]): `vtableName` =
@@ -124,14 +134,19 @@ macro defiface*(name: untyped, body: untyped): stmt {.immediate.} =
       var vtable {.global.} = initVtableFor(T, `iname`)
       return vtable
 
-    proc `converterName`*(a: any): `iname` =
+    proc typeid*[T](t: `iname`): TypeId =
+      return t.vtable.vtypeId
+
+    converter `converterName`*(a: any): `iname` =
       var res: `iname`
       res.vtable = getVtableFor(type(a), `iname`)
-      res.obj = cast[RootRef](a)
+      res.obj = toSomeGcPtr(a)
       return res
+
 
     `callWrappers`
 
+  # result.repr.echo
   result = result.copyNimTree
 
 proc implements*(ty: typedesc, superty: typedesc) =
@@ -139,3 +154,45 @@ proc implements*(ty: typedesc, superty: typedesc) =
     if not (ty is superty):
       error(name(ty) & " doesn't implement " & name(superty))
 
+proc myCmp(x, y: string): int =
+  if x < y: result = -1
+  elif x > y: result = 1
+  else: result = 0
+
+proc generateName(rootNode: NimNode): string {.compiletime.} =
+  var args: seq[string] = @[]
+  for node in rootNode:
+    args.add(node.repr)
+  args.sort(myCmp)
+  return "interface((" & args.join(", ") & "))"
+
+macro iface*(e: untyped): expr =
+  ## Inline version of defiface.
+  if e.kind != nnkPar:
+    error("expected iface((...))")
+
+  let name = generateName(e)
+  let inameNode = newIdentNode("I" & name)
+  let nameCheckNode = newIdentNode("check_" & name)
+  let nameNode = newIdentNode(name)
+
+  let r = quote do:
+    when not declared(`nameCheckNode`):
+      defiface `nameNode`:
+        discard
+
+      proc `nameCheckNode` (): `nameNode` =
+        discard # this exists, because we can't check if type is already defined
+
+    `inameNode`
+
+  let declBody = r[0][0][1]
+  let fields = declBody[0][2]
+
+  fields.del(0)
+  for field in e:
+    fields.add(newNimNode(nnkCall).add(field[0], newNimNode(nnkStmtList).add(field[1])))
+
+  declBody.treeRepr.echo
+
+  return r
