@@ -13,26 +13,20 @@ proc generateName(rootNode: NimNode): string {.compiletime.} =
   args.sort(myCmp)
   return "struct((" & args.join(", ") & "))"
 
-macro struct*(args): expr {.immediate.} =
+proc makeStruct*(name: NimNode, args: NimNode): tuple[typedefs: NimNode, others: NimNode] {.compiletime.} =
   if args.kind != nnkPar:
     error("expected struct((...))")
 
-  let name = generateName(args)
+  let name = $(name.ident)
   let nameNode = newIdentNode(name)
   let nameCheckNode = newIdentNode("check_" & name)
   let fields = newNimNode(nnkEmpty)
 
   let r = quote do:
-    when not declared(`nameCheckNode`):
-      type `nameNode` {.inject.} = object of RootObj
-        discard
+    type `nameNode` {.inject.} = object of RootObj
+      discard
 
-      proc `nameCheckNode` (): `nameNode` =
-        discard # this exists, because we can't check if type is already defined
-
-    `nameNode`
-
-  let declBody = r[0][0][1]
+  let declBody = r
   let fieldList = declBody[0][0][2][2]
 
   for node in args:
@@ -46,4 +40,4 @@ macro struct*(args): expr {.immediate.} =
   # r.treeRepr.echo
   # r.repr.echo
 
-  return `r`
+  return (r, newNimNode(nnkStmtList))

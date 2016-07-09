@@ -3,7 +3,8 @@ import macros, strutils, typetraits, algorithm
 
 export SomeGcPtr
 
-macro defiface*(name: untyped, body: untyped): stmt {.immediate.} =
+proc makeInterface*(name: NimNode, body: NimNode): tuple[typedefs: NimNode, others: NimNode] {.compiletime.} =
+  echo "generating ", name
   let nameStr = $name.ident
   let iname = newIdentNode("I" & nameStr)
   let vtableName = newIdentNode(nameStr & "VTable")
@@ -26,9 +27,14 @@ macro defiface*(name: untyped, body: untyped): stmt {.immediate.} =
 
   let callWrappers = newNimNode(nnkStmtList)
 
-  for arg in body:
+  for orgArg in body:
+    var arg = orgArg
+    if arg.kind == nnkExprColonExpr:
+      # Nim produces different node depending if part of expression or statement
+      arg = newNimNode(nnkCall).add(arg[0], newNimNode(nnkStmtList).add(arg[1]))
+
     if arg.kind == nnkCall:
-      arg.treeRepr.echo
+      # arg.treeRepr.echo
       let left = arg[0]
       var funcName: NimNode
       var args: NimNode
@@ -97,7 +103,7 @@ macro defiface*(name: untyped, body: untyped): stmt {.immediate.} =
 
       # Generate call wrappers
       let wrapper = quote do:
-        proc `funcName`*(self: `iname`): `ret` {.inline.} =
+        proc `funcName`*(self: `name`): `ret` {.inline.} =
           self.vtable.`funcName`(self.obj)
 
       for arg in args:
@@ -115,39 +121,36 @@ macro defiface*(name: untyped, body: untyped): stmt {.immediate.} =
   let converterName = newIdentNode("asI" & nameStr)
   vtableInitBody.add(newNimNode(nnkReturnStmt).add(newIdentNode("res")))
 
-  result = quote do:
-    type
-      `name`* = concept x
-        `genericBody`
-
+  result.typedefs = quote do:
     `vtableBody`
 
     type
-      `iname`* = object
+      `name`* = object
         obj: SomeGcPtr
         vtable: `vtableName`
 
-    proc initVtableFor[T](impl: typedesc[T], iface: typedesc[`iname`]): `vtableName` =
+  result.others = quote do:
+    proc initVtableFor[T](impl: typedesc[T], iface: typedesc[`name`]): `vtableName` =
       `vtableInitBody`
 
-    proc getVtableFor*[T](impl: typedesc[T], t: typedesc[`iname`]): `vtableName` {.inline.} =
-      var vtable {.global.} = initVtableFor(T, `iname`)
+    proc getVtableFor*[T](impl: typedesc[T], t: typedesc[`name`]): `vtableName` {.inline.} =
+      var vtable {.global.} = initVtableFor(T, `name`)
       return vtable
 
-    proc typeid*[T](t: `iname`): TypeId =
+    proc typeid*[T](t: `name`): TypeId =
       return t.vtable.vtypeId
 
-    converter `converterName`*(a: any): `iname` =
-      var res: `iname`
-      res.vtable = getVtableFor(type(a), `iname`)
+    converter `converterName`*(a: any): `name` =
+      var res: `name`
+      res.vtable = getVtableFor(type(a), `name`)
       res.obj = toSomeGcPtr(a)
       return res
-
 
     `callWrappers`
 
   # result.repr.echo
-  result = result.copyNimTree
+  result.others = result.others.copyNimTree
+  result.typedefs = result.typedefs.copyNimTree
 
 proc implements*(ty: typedesc, superty: typedesc) =
   static:
@@ -165,34 +168,3 @@ proc generateName(rootNode: NimNode): string {.compiletime.} =
     args.add(node.repr)
   args.sort(myCmp)
   return "interface((" & args.join(", ") & "))"
-
-macro iface*(e: untyped): expr =
-  ## Inline version of defiface.
-  if e.kind != nnkPar:
-    error("expected iface((...))")
-
-  let name = generateName(e)
-  let inameNode = newIdentNode("I" & name)
-  let nameCheckNode = newIdentNode("check_" & name)
-  let nameNode = newIdentNode(name)
-
-  let r = quote do:
-    when not declared(`nameCheckNode`):
-      defiface `nameNode`:
-        discard
-
-      proc `nameCheckNode` (): `nameNode` =
-        discard # this exists, because we can't check if type is already defined
-
-    `inameNode`
-
-  let declBody = r[0][0][1]
-  let fields = declBody[0][2]
-
-  fields.del(0)
-  for field in e:
-    fields.add(newNimNode(nnkCall).add(field[0], newNimNode(nnkStmtList).add(field[1])))
-
-  declBody.treeRepr.echo
-
-  return r

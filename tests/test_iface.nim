@@ -1,18 +1,26 @@
-import collections/interfaces
+import collections/interfaces, collections/exttype
 
 when isMainModule:
-  defiface Duck:
-    quack(foo: string, bar: int): int
-    bar(): float
+  # defiface Duck:
+  #   quack(foo: string, bar: int): int
+  #   bar(): float
+  exttypes:
+    type
+      Duck = iface((
+        quack(foo: string, bar: int): int,
+        bar(): float
+      ))
+
+      SuperDuck = iface((
+        #extends Duck
+        superQuack(): void
+      ))
+
 
   type DuckImpl = ref object of RootObj
 
   proc quack(d: DuckImpl, foo: string, bar: int): int = 5
   proc bar(d: DuckImpl): float = 5.0
-
-  defiface SuperDuck:
-    #extends Duck
-    superQuack(): void
 
   static:
     echo DuckImpl is Duck
@@ -22,7 +30,3 @@ when isMainModule:
   let iduck = myDuck.asIDuck
   iduck.repr.echo
   echo iduck.quack("foo", 5)
-
-  var duck1: iface((bar(): float))
-  duck1 = myDuck
-  echo duck1.bar()
