@@ -1,9 +1,14 @@
-import collections/gcptr
-import collections/iface
+import collections/interfaces, collections/exttype, collections/gcptrs
 
 when isMainModule:
-  defiface Duck:
-    quack(foo: string, bar: int): int
+  exttypes:
+    type
+      Duck = iface((
+        quack(foo: string, bar: int): int
+      ))
+
+  let iemptyduck: Duck = null
+  echo iemptyduck.repr
 
   type DuckImpl = object of RootObj
     bar1: int
@@ -15,7 +20,7 @@ when isMainModule:
 
   let myDuck = new(DuckImpl)
   myDuck.bar1 = 66
-  let myDuckGc: gcptr[DuckImpl] = myDuck
+  let myDuckGc = myDuck
   myDuckGc.bar1 = 67
   let iduck = myDuck.asIDuck
 

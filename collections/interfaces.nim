@@ -1,7 +1,15 @@
-import collections/misc, collections/gcptr, collections/reflect
+import collections/misc, collections/gcptrs, collections/goslice, collections/reflect
 import macros, strutils, typetraits, algorithm
 
 export SomeGcPtr
+
+type
+  Interface*[VTABLE] = object
+    obj*: SomeGcPtr
+    vtable*: VTABLE
+
+proc `==`*[T](a: Interface[T], b: Interface[T]): bool =
+  return a.vtable == b.vtable and a.obj == b.obj
 
 proc makeInterface*(name: NimNode, body: NimNode): tuple[typedefs: NimNode, others: NimNode] {.compiletime.} =
   echo "generating ", name
@@ -125,9 +133,7 @@ proc makeInterface*(name: NimNode, body: NimNode): tuple[typedefs: NimNode, othe
     `vtableBody`
 
     type
-      `name`* = object
-        obj: SomeGcPtr
-        vtable: `vtableName`
+      `name`* = Interface[`vtableName`]
 
   result.others = quote do:
     proc initVtableFor[T](impl: typedesc[T], iface: typedesc[`name`]): `vtableName` =
@@ -140,11 +146,17 @@ proc makeInterface*(name: NimNode, body: NimNode): tuple[typedefs: NimNode, othe
     proc typeid*[T](t: `name`): TypeId =
       return t.vtable.vtypeId
 
-    converter `converterName`*(a: any): `name` =
-      var res: `name`
-      res.vtable = getVtableFor(type(a), `name`)
-      res.obj = toSomeGcPtr(a)
-      return res
+    converter `converterName`*[T](a: T): `name` =
+      when T is NullType:
+        var res: `name`
+        return res
+      else:
+        var res: `name`
+        res.vtable = getVtableFor(type(a), `name`)
+        res.obj = toSomeGcPtr(a)
+        return res
+
+    specializeGcPtr(`name`)
 
     `callWrappers`
 

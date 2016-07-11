@@ -22,11 +22,11 @@ proc makeStruct*(name: NimNode, args: NimNode): tuple[typedefs: NimNode, others:
   let nameCheckNode = newIdentNode("check_" & name)
   let fields = newNimNode(nnkEmpty)
 
-  let r = quote do:
+  let typespecs = quote do:
     type `nameNode` {.inject.} = object of RootObj
       discard
 
-  let declBody = r
+  let declBody = typespecs
   let fieldList = declBody[0][0][2][2]
 
   for node in args:
@@ -37,7 +37,7 @@ proc makeStruct*(name: NimNode, args: NimNode): tuple[typedefs: NimNode, others:
     else:
       error("unexpected field " & ($node.kind))
 
-  # r.treeRepr.echo
-  # r.repr.echo
+  let others = quote do:
+    specializeGcPtr(`nameNode`)
 
-  return (r, newNimNode(nnkStmtList))
+  return (typespecs, others)

@@ -16,7 +16,6 @@ when isMainModule:
         superQuack(): void
       ))
 
-
   type DuckImpl = ref object of RootObj
 
   proc quack(d: DuckImpl, foo: string, bar: int): int = 5

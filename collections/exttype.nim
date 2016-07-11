@@ -1,5 +1,5 @@
 import macros
-import collections/interfaces, collections/anonfield, collections/macrotool
+import collections/interfaces, collections/anonfield, collections/macrotool, collections/gcptrs
 
 proc processType(metaTypeName: string; name, arg: NimNode): tuple[typedefs, others: NimNode] =
   if metaTypeName == "iface":
