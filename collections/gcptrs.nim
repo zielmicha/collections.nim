@@ -6,7 +6,7 @@ const useGcRef = not (compileOption("gc", "boehm") or compileOption("gc", "none"
 
 type
   gcptr*[T] = object
-    p*: ptr T
+    p: ptr T
     when useGcRef:
       gcref: RootRef
 
@@ -22,8 +22,12 @@ proc makeGcptr*[T](p: ptr T, gcref: RootRef): gcptr[T] =
   else:
     return gcptr[T](p: p)
 
-proc `+%`*[T](a: gcptr[T], b: int): gcptr[T] =
-  return makeGcptr(cast[ptr T](cast[uint](a.p) +% sizeof(T) * b),
+proc gcnew*[T](t: typedesc[T]): gcptr[T] =
+  let p = new(T)
+  return makeGcptr(addr p[], p)
+
+proc ptrAdd*[T](a: gcptr[T], b: int): gcptr[T] =
+  return makeGcptr(cast[ptr T](cast[uint](a.p) + uint(sizeof(T) * b)),
                    when useGcRef: a.gcref else: nil)
 
 converter fromRef*[T](t: ref T): gcptr[T] =
@@ -50,12 +54,15 @@ proc toSomeGcPtr*[T](p: gcptr[T]): SomeGcPtr =
 proc `[]`*[T](v: gcptr[T]): var T =
   return v.p[]
 
+proc `[]=`*[T](v: gcptr[T], val: T) =
+  v.p[] = val
+
 type
   FuncWrapper[T] = ref object of RootObj
     fun: (proc(): T)
 
 template gclocaladdr*(v): expr =
-  proc getAddr(): ptr type(v) = addr(v)
+  let getAddr = (proc(): ptr type(v) = addr(v))
   makeGcptr(getAddr(), FuncWrapper[ptr type(v)](fun: getAddr))
 
 macro gcaddr*(v): expr =

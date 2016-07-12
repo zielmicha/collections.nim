@@ -1,5 +1,5 @@
 ## Implements struct(()) macro, which can be used to declare objects, potentially with anonymous fields.
-import macros, algorithm, strutils
+import macros, algorithm, strutils, collections/macrotool
 
 proc myCmp(x, y: string): int =
   if x < y: result = -1
@@ -23,7 +23,7 @@ proc makeStruct*(name: NimNode, args: NimNode): tuple[typedefs: NimNode, others:
   let fields = newNimNode(nnkEmpty)
 
   let typespecs = quote do:
-    type `nameNode` {.inject.} = object of RootObj
+    type `nameNode`* {.inject.} = object of RootObj
       discard
 
   let declBody = typespecs
@@ -31,9 +31,9 @@ proc makeStruct*(name: NimNode, args: NimNode): tuple[typedefs: NimNode, others:
 
   for node in args:
     if node.kind == nnkExprColonExpr:
-      fieldList.add(newNimNode(nnkIdentDefs).add(node[0], node[1], newNimNode(nnkEmpty)))
+      fieldList.add(newNimNode(nnkIdentDefs).add(publicIdent(node[0]), node[1], newNimNode(nnkEmpty)))
     elif node.kind == nnkIdent:
-      fieldList.add(newNimNode(nnkIdentDefs).add(node, node, newNimNode(nnkEmpty)))
+      fieldList.add(newNimNode(nnkIdentDefs).add(publicIdent(node), node, newNimNode(nnkEmpty)))
     else:
       error("unexpected field " & ($node.kind))
 

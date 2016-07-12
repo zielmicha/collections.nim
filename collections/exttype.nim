@@ -40,7 +40,7 @@ macro exttypes*(body: untyped): stmt =
     else:
       typeSection.add(def)
 
-  mainStmts.repr.echo
+  # mainStmts.repr.echo
 
   return mainStmts
 
