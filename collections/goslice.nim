@@ -39,6 +39,12 @@ proc `[]`*[T](s: GoSlice[T], i: int): T =
   let d: gcptr[T] = s.data
   return d.ptrAdd(i)[]
 
+proc `[]`*(s: GoArray, i: int | uint8): auto =
+  return s.arr[i.int]
+
+proc `[]=`*[T](s: GoArray, i: int, val: T) =
+  s.arr[i] = val
+
 proc `[]=`*[T](s: GoSlice[T], i: int, val: T) =
   if i < 0 or i >= s.length:
     raise newException(ValueError, "bad index")
@@ -46,8 +52,17 @@ proc `[]=`*[T](s: GoSlice[T], i: int, val: T) =
   let item = s.data.ptrAdd(i)
   item[] = val
 
+proc `gcaddr[]`*[T](s: GoSlice[T], i: int): gcptr[T] =
+  if i < 0 or i >= s.length:
+    raise newException(ValueError, "bad index")
+
+  return s.data.ptrAdd(i)
+
 proc len*(s: GoSlice): int =
   return s.length
+
+proc len*(s: GoArray): int =
+  return s.arr.high
 
 proc make*[T](t: typedesc[GoSlice[T]], len: int): GoSlice[T] =
   let wrapper = new(SeqWrapper[T])
@@ -68,18 +83,30 @@ converter toSlice*[T; n: static[int]](arr: GoArray[T, n]): GoSlice[T] =
   else:
     return GoSlice[T](data: makeGcPtr(addr arr.arr[0], arr), length: n, capacity: n)
 
+iterator pairs*[T](s: GoSlice[T]): (int, T) =
+  for i in 0..<s.len:
+    yield (i, s[i])
+
+iterator items*[T](s: GoSlice[T]): T =
+  for i in 0..<s.len:
+    yield s[i]
+
+converter toSeq*[T](s: GoSlice[T]): seq[T] =
+  result = newSeq[T](s.len)
+  for i, item in s:
+    result[i] = item
+
 proc `==`*[T](a: GoSlice[T], b: GoSlice[T]): bool =
   return a.data == b.data and a.len == b.len
 
 proc copy*[T](dst: GoSlice[T], src: GoSlice[T]): int {.discardable.} =
-  # TODO
   result = min(dst.len, src.len)
-  for i in 0..<result:
-    dst[i] = src[i]
-
-iterator pairs*[T](s: GoSlice[T]): (int, T) =
-  for i in 0..<s.len:
-    yield (i, s[i])
+  if cast[uint](addr dst.data[]) > cast[uint](addr src.data[]):
+    for i in 0..<result:
+      dst[result - i - 1] = src[result - i - 1]
+  else:
+    for i in 0..<result:
+      dst[i] = src[i]
 
 template specializeGoSlice*(T) =
   # Nim doesn't have return type inference for converters :(

@@ -22,6 +22,9 @@ proc makeGcptr*[T](p: ptr T, gcref: RootRef): gcptr[T] =
   else:
     return gcptr[T](p: p)
 
+proc makeGcptr*[T, R](p: ptr T, gcref: gcptr[R]): gcptr[T] =
+  return makeGcptr(p, gcref.gcref)
+
 proc gcnew*[T](t: typedesc[T]): gcptr[T] =
   let p = new(T)
   return makeGcptr(addr p[], p)
@@ -65,10 +68,13 @@ template gclocaladdr*(v): expr =
   let getAddr = (proc(): ptr type(v) = addr(v))
   makeGcptr(getAddr(), FuncWrapper[ptr type(v)](fun: getAddr))
 
-macro gcaddr*(v): expr =
+macro gcaddr*(v: untyped): expr =
   # TODO: members of ref and gcptr types e.g:
   # TODO: gcaddr getFoo().bar where getFoo returns gcptr type
-  return newCall(newIdentNode("gclocaladdr"), v)
+  if v.kind == nnkBracketExpr:
+    return newCall(newIdentNode("gcaddr[]"), v[0], v[1])
+  else:
+    return newCall(newIdentNode("gclocaladdr"), v)
 
 template specializeGcPtr*(T) =
   # Nim doesn't have return type inference for converters :(
