@@ -32,6 +32,12 @@ proc slice*[T](s: GoSlice[T], low: int64=0): GoSlice[T] =
 proc slice*[T](s: GoSlice[T], low: int64=0, high: int64): GoSlice[T] =
   return slice(s, low, high=high, max=s.capacity)
 
+proc slice*(s: string, low: int64=0): string =
+  return s[low.int..^1]
+
+proc slice*(s: string, low: int64=0, high: int64=0): string =
+  return s[low.int..<high.int]
+
 proc `[]`*[T](s: GoSlice[T], i: int): T =
   if i < 0 or i >= s.length:
     raise newException(ValueError, "bad index")
