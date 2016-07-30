@@ -12,3 +12,9 @@ proc flattenNode*(v: NimNode, kind: NimNodeKind): seq[NimNode] {.compiletime.} =
 
 proc publicIdent*(node: NimNode): NimNode =
   return newNimNode(nnkPostfix).add(newIdentNode("*"), node)
+
+proc stripPublic*(node: NimNode): NimNode =
+  if node.kind == nnkPostfix:
+    return node[1]
+  else:
+    return node

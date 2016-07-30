@@ -35,17 +35,20 @@ proc slice*[T](s: GoSlice[T], low: int64=0, high: int64): GoSlice[T] =
 proc slice*(s: string, low: int64=0): string =
   return s[low.int..^1]
 
-proc slice*(s: string, low: int64=0, high: int64=0): string =
+proc slice*(s: string, low: int64=0, high: int64): string =
   return s[low.int..<high.int]
 
-proc `[]`*[T](s: GoSlice[T], i: int): T =
+proc `[]`*[T](s: GoSlice[T], i: int): var T =
   if i < 0 or i >= s.length:
     raise newException(ValueError, "bad index")
 
   let d: gcptr[T] = s.data
   return d.ptrAdd(i)[]
 
-proc `[]`*(s: GoArray, i: int | uint8): auto =
+proc `[]`*(s: GoArray, i: int): auto =
+  return s.arr[i.int]
+
+proc `[]`*[T; ss: static[int]](s: GoArray[T, ss], i: int): var T =
   return s.arr[i.int]
 
 proc `[]=`*[T](s: GoArray, i: int, val: T) =
@@ -67,15 +70,21 @@ proc `gcaddr[]`*[T](s: GoSlice[T], i: int): gcptr[T] =
 proc len*(s: GoSlice): int =
   return s.length
 
+proc cap*(s: GoSlice): int =
+  return s.capacity
+
 proc len*(s: GoArray): int =
   return s.arr.high
 
-proc make*[T](t: typedesc[GoSlice[T]], len: int): GoSlice[T] =
+proc make*[T](t: typedesc[GoSlice[T]], len: int, cap: int): GoSlice[T] =
   let wrapper = new(SeqWrapper[T])
   newSeq(wrapper.s, len)
   result.data = makeGcptr(addr wrapper.s[0], wrapper)
   result.length = len
-  result.capacity = len
+  result.capacity = cap
+
+proc make*[T](t: typedesc[GoSlice[T]], len: int): GoSlice[T] =
+  return make(t, len, len)
 
 converter toSlice*(s: string): GoSlice[byte] =
   let slice: GoSlice[byte] = make(GoSlice[byte], s.len)

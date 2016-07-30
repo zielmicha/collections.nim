@@ -11,8 +11,5 @@ proc nextTypeIndex(): int {.compiletime.} =
 proc getTypeIndex[T](t: typedesc[T]): int =
   return nextTypeIndex()
 
-proc typeid*[T: object](t: typedesc[T]): TypeId =
+proc typeid*[T](t: typedesc[T]): TypeId =
   return TypeId(getTypeIndex(T))
-
-proc typeid*[T](t: typedesc[ref T]): TypeId =
-  return typeid(T)

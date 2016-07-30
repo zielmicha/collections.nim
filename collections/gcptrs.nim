@@ -39,20 +39,7 @@ converter fromRef*[T](t: ref T): gcptr[T] =
 proc `==`*[T](a, b: gcptr[T]): bool =
   return a.p == b.p
 
-proc unwrap*[T](p: SomeGcPtr, t: typedesc[ref T]): ref T {.inline.} =
-  return cast[ref T](p.p)
-
-proc unwrap*[T](p: SomeGcPtr, t: typedesc[gcptr[T]]): gcptr[T] {.inline.} =
-  return cast[gcptr[T]](p)
-
-proc unwrap*(p: SomeGcPtr, t: typedesc[NullType]): NullType {.inline.} =
-  return null
-
-proc toSomeGcPtr*[T](p: ref T): SomeGcPtr =
-  return cast[SomeGcPtr](p.fromRef)
-
-proc toSomeGcPtr*[T](p: gcptr[T]): SomeGcPtr =
-  return cast[SomeGcPtr](p)
+include collections/somegcptr
 
 proc `[]`*[T](v: gcptr[T]): var T =
   return v.p[]
