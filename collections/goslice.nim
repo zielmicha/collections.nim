@@ -92,6 +92,11 @@ converter toSlice*(s: string): GoSlice[byte] =
     slice[i] = s[i].byte
   return slice
 
+converter toString*(slice: GoSlice[byte]): string =
+  result = newString(slice.len)
+  for i in 0..<slice.len:
+    result[i] = slice[i].char
+
 converter toSlice*[T; n: static[int]](arr: GoArray[T, n]): GoSlice[T] =
   when n == 0:
     return GoSlice[T](data: null, length: 0, capacity: 0)

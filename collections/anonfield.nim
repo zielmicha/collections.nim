@@ -29,15 +29,33 @@ proc makeStruct*(name: NimNode, args: NimNode): tuple[typedefs: NimNode, others:
   let declBody = typespecs
   let fieldList = declBody[0][0][2][2]
 
+  let others = quote do:
+    discard
+
   for node in args:
     if node.kind == nnkExprColonExpr:
-      fieldList.add(newNimNode(nnkIdentDefs).add(publicIdent(node[0]), node[1], newNimNode(nnkEmpty)))
-    elif node.kind == nnkIdent:
-      fieldList.add(newNimNode(nnkIdentDefs).add(publicIdent(node), node, newNimNode(nnkEmpty)))
+      var inline: bool
+      var fieldName: NimNode
+      if node[0].kind == nnkCommand and node[0][0] == newIdentNode("inline"):
+        inline = true
+        fieldName = node[0][1]
+      elif node[0].kind in {nnkIdent, nnkAccQuoted}:
+        fieldName = node[0]
+      else:
+        error("unexpected field name " & ($node[0].kind))
+
+      let fieldType = node[1]
+
+      if inline:
+        let inlineHandler = quote do:
+          makeNestedAccessors(`fieldType`, `nameNode`, `fieldName`, sepVar=true)
+        others.add(inlineHandler)
+
+      fieldList.add(newNimNode(nnkIdentDefs).add(publicIdent(fieldName), fieldType, newNimNode(nnkEmpty)))
     else:
       error("unexpected field " & ($node.kind))
 
-  let others = quote do:
+  others.add quote do:
     specializeGcPtr(`nameNode`)
 
   return (typespecs, others)

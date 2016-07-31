@@ -36,6 +36,9 @@ proc ptrAdd*[T](a: gcptr[T], b: int): gcptr[T] =
 converter fromRef*[T](t: ref T): gcptr[T] =
   return makeGcptr(cast[ptr T](t), t.RootRef)
 
+#converter toVar*[T](t: gcptr[T]): var T =
+#  return t[]
+
 proc `==`*[T](a, b: gcptr[T]): bool =
   return a.p == b.p
 
@@ -68,7 +71,7 @@ template specializeGcPtr*(T) =
   converter fromNil*(t: NullType): gcptr[T] =
     return makeGcptr[T](nil, nil)
 
-  makeNestedAccessors(T, gcptr[T])
+  makeNestedAccessors(T, gcptr[T], `[]`)
 
 specializeGcPtr(int)
 specializeGcPtr(int8)

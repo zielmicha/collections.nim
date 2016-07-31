@@ -18,3 +18,11 @@ proc stripPublic*(node: NimNode): NimNode =
     return node[1]
   else:
     return node
+
+proc identToString*(node: NimNode): string =
+  if node.kind == nnkIdent:
+    return $node.ident
+  elif node.kind == nnkAccQuoted:
+    return $node[0].ident
+  else:
+    error("expected identifier, found " & $node.kind)

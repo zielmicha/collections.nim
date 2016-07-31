@@ -1,4 +1,4 @@
-import collections/misc, collections/gcptrs, collections/goslice, collections/reflect
+import collections/misc, collections/gcptrs, collections/goslice, collections/reflect, collections/macrotool
 import macros, strutils, typetraits, algorithm
 
 export SomeGcPtr
@@ -61,7 +61,7 @@ proc makeInterface*(name: NimNode, body: NimNode): tuple[typedefs: NimNode, othe
       else:
         error("invalid declaration " & $left.kind)
 
-      funcName = newIdentNode($funcName.ident)
+      funcName = newIdentNode($funcName.identToString)
 
       # Generate check for concept
       let callArgList = newNimNode(nnkCall)
