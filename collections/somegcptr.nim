@@ -14,13 +14,15 @@ proc toSomeGcPtr*[T](p: ref T): SomeGcPtr =
 proc toSomeGcPtr*[T](p: gcptr[T]): SomeGcPtr =
   return cast[SomeGcPtr](p)
 
+var nullsomegcptr* = makeGcptr[pointer](nil, nil)
+
 # Value types
 
 type
   ValueWrapper[T] = ref object of RootObj
     value: T
 
-  ValueType = string | int
+  ValueType* = SomeInteger | string | object
 
 proc toSomeGcPtr*(p: ValueType): SomeGcPtr =
   return toSomeGcPtr(ValueWrapper[ValueType](value: p))

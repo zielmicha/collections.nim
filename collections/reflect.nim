@@ -1,6 +1,6 @@
 type TypeId* = distinct int
 
-proc `==`(a: TypeId, b: TypeId): bool {.borrow.}
+proc `==`*(a: TypeId, b: TypeId): bool {.borrow.}
 
 var currentTypeIndex {.compiletime.} = 0
 
@@ -11,5 +11,5 @@ proc nextTypeIndex(): int {.compiletime.} =
 proc getTypeIndex[T](t: typedesc[T]): int =
   return nextTypeIndex()
 
-proc typeid*[T](t: typedesc[T]): TypeId =
+proc typeId*[T](t: typedesc[T]): TypeId =
   return TypeId(getTypeIndex(T))

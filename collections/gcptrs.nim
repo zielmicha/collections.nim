@@ -55,7 +55,7 @@ type
     fun: (proc(): T)
 
 template gclocaladdr*(v): expr =
-  let getAddr = (proc(): ptr type(v) = addr(v))
+  let getAddr = (proc(): ptr type(v) = unsafeAddr(v))
   makeGcptr(getAddr(), FuncWrapper[ptr type(v)](fun: getAddr))
 
 macro gcaddr*(v: untyped): expr =
@@ -70,6 +70,9 @@ template specializeGcPtr*(T) =
   # Nim doesn't have return type inference for converters :(
   converter fromNil*(t: NullType): gcptr[T] =
     return makeGcptr[T](nil, nil)
+
+  converter fromNil*(t: NullType): gcptr[gcptr[T]] =
+    return makeGcptr[gcptr[T]](nil, nil)
 
   makeNestedAccessors(T, gcptr[T], `[]`)
 

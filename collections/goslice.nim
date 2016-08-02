@@ -1,5 +1,5 @@
 ## Implementation of slice type from Go
-import collections/gcptrs
+import collections/gcptrs, typetraits
 
 type
   GoSlice*[T] = object
@@ -132,6 +132,9 @@ template specializeGoSlice*(T) =
   # Nim doesn't have return type inference for converters :(
   converter fromNil*(t: NullType): GoSlice[T] =
     return GoSlice[T](data: null, length: 0, capacity: 0)
+
+  converter fromNil*(t: NullType): GoSlice[gcptr[T]] =
+    return GoSlice[gcptr[T]](data: null, length: 0, capacity: 0)
 
 specializeGoSlice(int)
 specializeGoSlice(int8)

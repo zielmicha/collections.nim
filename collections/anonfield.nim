@@ -1,5 +1,5 @@
 ## Implements struct(()) macro, which can be used to declare objects, potentially with anonymous fields.
-import macros, algorithm, strutils, collections/macrotool
+import macros, algorithm, strutils, collections/macrotool, collections/goslice
 
 proc myCmp(x, y: string): int =
   if x < y: result = -1
@@ -57,5 +57,6 @@ proc makeStruct*(name: NimNode, args: NimNode): tuple[typedefs: NimNode, others:
 
   others.add quote do:
     specializeGcPtr(`nameNode`)
+    specializeGoSlice(`nameNode`)
 
   return (typespecs, others)

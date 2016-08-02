@@ -1,4 +1,5 @@
 import macros, tables
+import collections/macrotool
 
 var syntheticFields {.compiletime.} = initTable[string, seq[NimNode]]()
 
@@ -36,18 +37,13 @@ macro makeNestedAccessors*(innerType: typed, outerType: typed, accessor: untyped
     let nameNode = newIdentNode(name)
 
     var varRetType: NimNode
-
-    if fieldTy.kind == nnkSym:
-      varRetType = newNimNode(nnkVarTy).add(fieldTy)
-    elif fieldTy.kind == nnkBracketExpr and fieldTy.len == 2: # hacky
-      varRetType = newNimNode(nnkVarTy).add(newNimNode(nnkBracketExpr).add(newIdentNode($fieldTy[0]),
-                                                                        newIdentNode($fieldTy[1])))
-    else:
+    varRetType = symToExpr(fieldTy)
+    if varRetType == nil:
       varRetType = newIdentNode("auto")
-
+    else:
+      varRetType = newNimNode(nnkVarTy).add(varRetType)
     # TODO: visibility
 
-    # TODO: check if this whole trickery with `var` is needed
     # TODO: not ideal, but it's not always possible to insert getType into AST
     # TOOD: `var auto` should work, but doesn't
     if xSepVar:

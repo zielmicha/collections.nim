@@ -26,3 +26,12 @@ proc identToString*(node: NimNode): string =
     return $node[0].ident
   else:
     error("expected identifier, found " & $node.kind)
+
+proc symToExpr*(val: NimNode): NimNode =
+  if val.kind == nnkSym:
+    return newIdentNode($val)
+  elif val.kind == nnkBracketExpr and val.len == 2: # hacky
+    return newNimNode(nnkBracketExpr).add(symToExpr(val[0]),
+                                          symToExpr(val[1]))
+  else:
+    return nil

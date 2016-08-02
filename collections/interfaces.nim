@@ -1,5 +1,5 @@
 import collections/misc, collections/gcptrs, collections/goslice, collections/reflect, collections/macrotool
-import macros, strutils, typetraits, algorithm
+import macros, strutils, typetraits, algorithm, tables
 
 export SomeGcPtr
 
@@ -7,6 +7,8 @@ type
   Interface*[VTABLE] = object
     obj*: SomeGcPtr
     vtable*: VTABLE
+
+var interfaceFields {.compileTime.} = initTable[string, seq[NimNode]]() # module namespace collisions
 
 proc `==`*[T](a: Interface[T], b: Interface[T]): bool =
   return a.vtable == b.vtable and a.obj == b.obj
@@ -25,7 +27,7 @@ proc makeInterface*(name: NimNode, body: NimNode): tuple[typedefs: NimNode, othe
       vtypeId: TypeId # there are problems with using symbols that are already procs
 
   let vtableInner = vtableBody[0][0][2][0][2]
-  # vtableInner.del(0)
+  #vtableInner.del(0)
   let vtableInitBody = newNimNode(nnkStmtList)
   vtableInitBody.add(newNimNode(nnkLetSection).add(
     newNimNode(nnkIdentDefs).add(newIdentNode("res"), newEmptyNode(),
@@ -34,6 +36,7 @@ proc makeInterface*(name: NimNode, body: NimNode): tuple[typedefs: NimNode, othe
     res.vtypeId = typeid(T)
 
   let callWrappers = newNimNode(nnkStmtList)
+  var allFields: seq[NimNode] = @[]
 
   for orgArg in body:
     var arg = orgArg
@@ -41,8 +44,9 @@ proc makeInterface*(name: NimNode, body: NimNode): tuple[typedefs: NimNode, othe
       # Nim produces different node depending if part of expression or statement
       arg = newNimNode(nnkCall).add(arg[0], newNimNode(nnkStmtList).add(arg[1]))
 
-    if arg.kind == nnkCall:
+    proc addField(arg: NimNode) =
       # arg.treeRepr.echo
+      allFields.add(arg.copyNimTree)
       let left = arg[0]
       var funcName: NimNode
       var args: NimNode
@@ -121,13 +125,23 @@ proc makeInterface*(name: NimNode, body: NimNode): tuple[typedefs: NimNode, othe
         wrapper[0][6][0].add(arg[0])
 
       callWrappers.add wrapper
+
+    if arg.kind == nnkCall:
+      addField(arg)
     elif arg.kind == nnkCommand:
-      discard
+      if $(arg[0].ident) == "extends":
+        let name = $(arg[1].ident)
+        for field in interfaceFields[name]:
+          addField(field)
+      else:
+        error("invalid command")
     else:
       error("invalid statement in interface specification: " & $arg.kind)
 
+  interfaceFields[$(name.ident)] = allFields
   let converterName = newIdentNode("asI" & nameStr)
   vtableInitBody.add(newNimNode(nnkReturnStmt).add(newIdentNode("res")))
+  vtableBody[0][0][2][0][2] = vtableInner
 
   result.typedefs = quote do:
     `vtableBody`
@@ -143,20 +157,26 @@ proc makeInterface*(name: NimNode, body: NimNode): tuple[typedefs: NimNode, othe
       var vtable {.global.} = initVtableFor(T, `name`)
       return vtable
 
-    proc typeid*[T](t: `name`): TypeId =
+    proc typeId*(t: `name`): TypeId =
       return t.vtable.vtypeId
 
     converter `converterName`*[T](a: T): `name` =
-      when T is NullType:
+      when T is void:
+        {.error: "nope".}
+      elif T is NullType:
         var res: `name`
         return res
-      else:
+      elif T is gcptr or T is ref or T is ValueType:
         var res: `name`
         res.vtable = getVtableFor(type(a), `name`)
         res.obj = toSomeGcPtr(a)
         return res
+      else:
+        static:
+          error("type not supported")
 
     specializeGcPtr(`name`)
+    specializeGoSlice(`name`)
 
     `callWrappers`
 
