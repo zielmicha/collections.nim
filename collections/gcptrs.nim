@@ -22,6 +22,12 @@ proc makeGcptr*[T](p: ptr T, gcref: RootRef): gcptr[T] =
   else:
     return gcptr[T](p: p)
 
+proc replaceAddr*[F, T](gcref: gcptr[F], p: ptr T): gcptr[T] =
+  when useGcRef:
+    return gcptr[T](p: p, gcref: gcref.gcref)
+  else:
+    return gcptr[T](p: p)
+
 proc makeGcptr*[T, R](p: ptr T, gcref: gcptr[R]): gcptr[T] =
   return makeGcptr(p, gcref.gcref)
 

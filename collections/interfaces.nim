@@ -13,6 +13,9 @@ var interfaceFields {.compileTime.} = initTable[string, seq[NimNode]]() # module
 proc `==`*[T](a: Interface[T], b: Interface[T]): bool =
   return a.vtable == b.vtable and a.obj == b.obj
 
+proc unwrapTo*[T](src: T, dest: pointer) =
+  cast[ptr T](dest)[] = src
+
 proc makeInterface*(name: NimNode, body: NimNode): tuple[typedefs: NimNode, others: NimNode] {.compiletime.} =
   echo "generating ", name
   let nameStr = $name.ident
@@ -32,25 +35,16 @@ proc makeInterface*(name: NimNode, body: NimNode): tuple[typedefs: NimNode, othe
   vtableInitBody.add(newNimNode(nnkLetSection).add(
     newNimNode(nnkIdentDefs).add(newIdentNode("res"), newEmptyNode(),
                                  newCall(bindSym"new", vtableName))))
-  vtableInitBody.add quote do:
-    res.vtypeId = typeid(T)
 
   let callWrappers = newNimNode(nnkStmtList)
   var allFields: seq[NimNode] = @[]
 
-  for orgArg in body:
-    var arg = orgArg
-    if arg.kind == nnkExprColonExpr:
-      # Nim produces different node depending if part of expression or statement
-      arg = newNimNode(nnkCall).add(arg[0], newNimNode(nnkStmtList).add(arg[1]))
-
-    proc addField(arg: NimNode) =
-      # arg.treeRepr.echo
-      allFields.add(arg.copyNimTree)
+  proc addField(arg: NimNode) =
       let left = arg[0]
       var funcName: NimNode
       var args: NimNode
       let ret = arg[1][0]
+
       if left.kind == nnkObjConstr:
         funcName = left[0]
         args = newNimNode(nnkStmtList)
@@ -115,7 +109,8 @@ proc makeInterface*(name: NimNode, body: NimNode): tuple[typedefs: NimNode, othe
 
       # Generate call wrappers
       let wrapper = quote do:
-        proc `funcName`*(self: `name`): `ret` {.inline.} =
+        # TODO: disable discardable
+        proc `funcName`*(self: `name`): `ret` {.inline, discardable.} =
           self.vtable.`funcName`(self.obj)
 
       for arg in args:
@@ -126,21 +121,34 @@ proc makeInterface*(name: NimNode, body: NimNode): tuple[typedefs: NimNode, othe
 
       callWrappers.add wrapper
 
+  for orgArg in body:
+    var arg = orgArg
+    if arg.kind == nnkExprColonExpr:
+      # Nim produces different node depending if part of expression or statement
+      arg = newNimNode(nnkCall).add(arg[0], newNimNode(nnkStmtList).add(arg[1]))
+
     if arg.kind == nnkCall:
+      allFields.add(arg.copyNimTree)
       addField(arg)
     elif arg.kind == nnkCommand:
       if $(arg[0].ident) == "extends":
         let name = $(arg[1].ident)
         for field in interfaceFields[name]:
+          allFields.add(field.copyNimTree)
           addField(field)
       else:
         error("invalid command")
     else:
       error("invalid statement in interface specification: " & $arg.kind)
 
+  proc addFieldFromStr(a: string) =
+    let arg = parseStmt(a)[0][0]
+    addField(newNimNode(nnkCall).add(arg[0], newNimNode(nnkStmtList).add(arg[1])))
+
+  addFieldFromStr("(unwrapTo(dest: pointer): void)")
+
   interfaceFields[$(name.ident)] = allFields
   let converterName = newIdentNode("asI" & nameStr)
-  vtableInitBody.add(newNimNode(nnkReturnStmt).add(newIdentNode("res")))
   vtableBody[0][0][2][0][2] = vtableInner
 
   result.typedefs = quote do:
@@ -152,12 +160,20 @@ proc makeInterface*(name: NimNode, body: NimNode): tuple[typedefs: NimNode, othe
   result.others = quote do:
     proc initVtableFor[T](impl: typedesc[T], iface: typedesc[`name`]): `vtableName` =
       `vtableInitBody`
+      assert res.vtypeId.int == 0
+      res.vtypeId = typeid(impl)
+      return res
 
-    proc getVtableFor*[T](impl: typedesc[T], t: typedesc[`name`]): `vtableName` {.inline.} =
-      var vtable {.global.} = initVtableFor(T, `name`)
-      return vtable
+  result.others.add parseStmt("""
+    proc getVtableFor*[T](impl: typedesc[T], t: typedesc[$1]): $2 {.inline.} =
+      var vtable {.global.} = initVtableFor(impl, $1)
+      return vtable""" % [nameStr, $vtableName.ident]) # FIXME: string parsing
 
+  result.others.add quote do:
     proc typeId*(t: `name`): TypeId =
+      if t.vtable == nil:
+        return InvalidTypeId
+
       return t.vtable.vtypeId
 
     converter `converterName`*[T](a: T): `name` =

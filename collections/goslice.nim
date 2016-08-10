@@ -10,27 +10,31 @@ type
   SeqWrapper[T] = object of RootObj
     s: seq[T]
 
-  GoArray*[T; n: static[int]] = ref object of RootObj
+  GoArray*[T; n: static[int]] = object of RootObj
     arr: array[n, T]
 
 proc slice*[T](s: GoSlice[T], low: int64=0, high: int64, max: int64): GoSlice[T] =
   if low >= s.capacity:
-    raise newException(ValueError, "low to big")
+    raise newException(ValueError, "low too big")
   if low > high:
     raise newException(ValueError, "low > high")
   if high > s.capacity:
-    raise newException(ValueError, "low to high")
+    raise newException(ValueError, "low too high")
   if max + low > s.capacity:
-    raise newException(ValueError, "max to high")
+    raise newException(ValueError, "max too high")
 
   let newBase = s.data.ptrAdd(low.int)
   return GoSlice[T](data: newBase, length: int(high - low), capacity: int(max - low))
 
 proc slice*[T](s: GoSlice[T], low: int64=0): GoSlice[T] =
-  return slice(s, low, high=s.length, max=s.capacity)
+  if low >= s.capacity:
+    raise newException(ValueError, "low too big")
+  return slice(s, low, high=s.length, max=s.capacity - low)
 
 proc slice*[T](s: GoSlice[T], low: int64=0, high: int64): GoSlice[T] =
-  return slice(s, low, high=high, max=s.capacity)
+  if low >= s.capacity:
+    raise newException(ValueError, "low too big")
+  return slice(s, low, high=high, max=s.capacity - low)
 
 proc slice*(s: string, low: int64=0): string =
   return s[low.int..^1]
@@ -45,13 +49,16 @@ proc `[]`*[T](s: GoSlice[T], i: int): var T =
   let d: gcptr[T] = s.data
   return d.ptrAdd(i)[]
 
-proc `[]`*(s: GoArray, i: int): auto =
+proc `[]`*(s: GoArray, i: SomeInteger): auto =
   return s.arr[i.int]
 
-proc `[]`*[T; ss: static[int]](s: GoArray[T, ss], i: int): var T =
+proc `[]`*[T; ss: static[int]](s: var GoArray[T, ss], i: int): var T =
   return s.arr[i.int]
 
-proc `[]=`*[T](s: GoArray, i: int, val: T) =
+proc `[]`*[T; ss: static[int]](s: GoArray[T, ss], i: int): T =
+  return s.arr[i.int]
+
+proc `[]=`*[T](s: var GoArray, i: int, val: T) =
   s.arr[i] = val
 
 proc `[]=`*[T](s: GoSlice[T], i: int, val: T) =
@@ -74,7 +81,7 @@ proc cap*(s: GoSlice): int =
   return s.capacity
 
 proc len*(s: GoArray): int =
-  return s.arr.high
+  return s.arr.len
 
 proc make*[T](t: typedesc[GoSlice[T]], len: int, cap: int): GoSlice[T] =
   let wrapper = new(SeqWrapper[T])
@@ -84,7 +91,7 @@ proc make*[T](t: typedesc[GoSlice[T]], len: int, cap: int): GoSlice[T] =
   result.capacity = cap
 
 proc make*[T](t: typedesc[GoSlice[T]], len: int): GoSlice[T] =
-  return make(t, len, len)
+  return make(GoSlice[T], len, len)
 
 converter toSlice*(s: string): GoSlice[byte] =
   let slice: GoSlice[byte] = make(GoSlice[byte], s.len)
@@ -97,11 +104,30 @@ converter toString*(slice: GoSlice[byte]): string =
   for i in 0..<slice.len:
     result[i] = slice[i].char
 
-converter toSlice*[T; n: static[int]](arr: GoArray[T, n]): GoSlice[T] =
-  when n == 0:
-    return GoSlice[T](data: null, length: 0, capacity: 0)
+proc gosliceFromArr[T; ss: static[int]](arr: GoArray[T, ss], data: gcptr[T], len: int): GoSlice[T] =
+  return GoSlice[T](data: data, length: len, capacity: len)
+
+proc gosliceFromArr[T; ss: static[int]](arr: GoArray[T, ss], data: NullType, len: int): GoSlice[T] =
+  return GoSlice[T](data: makeGcptr[T](nil, nil), length: len, capacity: len)
+
+template arrToSlice*(input): expr =
+  if input.len == 0:
+    gosliceFromArr(input, null, 0)
   else:
-    return GoSlice[T](data: makeGcPtr(addr arr.arr[0], arr), length: n, capacity: n)
+    let p = gcaddr input
+    gosliceFromArr(input, p.replaceAddr(addr input[0]), input.len)
+
+template slice*(arr: var GoArray, low: int64=0): expr =
+  slice(arrToSlice(arr), low)
+
+template slice*(arr: var GoArray, low: int64=0, high: int64): expr =
+  slice(arrToSlice(arr), low, high)
+
+template slice*(arr: var GoArray, low: int64=0, high: int64, cap: int64): expr =
+  slice(arrToSlice(arr), low, high, cap)
+
+template slice*(arr: var GoArray, low: int64=0, cap: int64): expr =
+  slice(arrToSlice(arr), low, cap=cap)
 
 iterator pairs*[T](s: GoSlice[T]): (int, T) =
   for i in 0..<s.len:
@@ -110,6 +136,14 @@ iterator pairs*[T](s: GoSlice[T]): (int, T) =
 iterator items*[T](s: GoSlice[T]): T =
   for i in 0..<s.len:
     yield s[i]
+
+iterator items*[T; ss: static[int]](s: GoArray[T, ss]): T =
+  for i in 0..<s.len:
+    yield s[i]
+
+iterator pairs*[T; ss: static[int]](s: GoArray[T, ss]): (int, T) =
+  for i in 0..<s.len:
+    yield (i, s[i])
 
 converter toSeq*[T](s: GoSlice[T]): seq[T] =
   result = newSeq[T](s.len)

@@ -27,11 +27,17 @@ proc identToString*(node: NimNode): string =
   else:
     error("expected identifier, found " & $node.kind)
 
-proc symToExpr*(val: NimNode): NimNode =
+proc symToExpr*(val: NimNode, depth=false): NimNode =
   if val.kind == nnkSym:
-    return newIdentNode($val)
-  elif val.kind == nnkBracketExpr and val.len == 2: # hacky
-    return newNimNode(nnkBracketExpr).add(symToExpr(val[0]),
-                                          symToExpr(val[1]))
+    if depth:
+      return newIdentNode($val)
+    else:
+      return val
+  elif val.kind in {nnkIntLit}:
+    return val
+  elif val.kind == nnkBracketExpr: # hacky
+    result = newNimNode(nnkBracketExpr)
+    for item in val:
+      result.add symToExpr(item, true)
   else:
     return nil

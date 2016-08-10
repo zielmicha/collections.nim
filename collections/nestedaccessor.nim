@@ -37,6 +37,7 @@ macro makeNestedAccessors*(innerType: typed, outerType: typed, accessor: untyped
     let nameNode = newIdentNode(name)
 
     var varRetType: NimNode
+
     varRetType = symToExpr(fieldTy)
     if varRetType == nil:
       varRetType = newIdentNode("auto")
