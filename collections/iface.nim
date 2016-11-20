@@ -1,23 +1,49 @@
-import collections/misc
+import collections/misc, collections/macrotool
 import macros, strutils, typetraits
 
-macro defiface*(name: untyped, body: untyped): stmt {.immediate.} =
-  let nameStr = $name.ident
-  let iname = newIdentNode("I" & nameStr)
-  let vtableName = newIdentNode(nameStr & "VTable")
-  let genericBody = newNimNode(nnkStmtList)
-  genericBody.add(newNimNode(nnkInfix).add(newIdentNode("is"),
-                                           newIdentNode("x"),
-                                           newNimNode(nnkRefTy)))
+type Interface* = object
+  vtable*: pointer
+  obj*: RootRef
+
+proc createVtable[T](ty: typedesc[T]): T =
+  var tab: T
+  return cast[T](allocShared0(sizeof(tab[]) * 100))
+
+macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
+
+  var genericParams: seq[NimNode] = @[]
+  var nameStr: string
+
+  if nameExpr.kind == nnkBracketExpr:
+    nameStr = $nameExpr[0].ident
+    for node in nameExpr: genericParams.add node
+    genericParams.del(0)
+  else:
+    nameStr = $nameExpr.ident
+
+  let name = newIdentNode(nameStr) # Duck
+  let vtableName = newIdentNode(nameStr & "VTable") # DuckVTable
+  let vtableExpr = newTypeInstance(vtableName, genericParams) # DuckVTable[T]
+  let vtableDeclExpr = publicIdent(vtableName) # DuckVTable*
+
   let vtableBody = quote do:
-    type `vtableName`* = ref object
+    type `vtableDeclExpr`[] = ptr object
       discard
+
+  template addGenericParams(place) =
+    for node in genericParams:
+      place.add(newNimNode(nnkIdentDefs).add(node, newNimNode(nnkEmpty), newNimNode(nnkEmpty)))
+
+  # add generic parameters to type decl
+  addGenericParams(vtableBody[0][0][1])
+
   let vtableInner = vtableBody[0][0][2][0][2]
-  vtableInner.del(0)
+  vtableInner.del(0) # del discard
+
   let vtableInitBody = newNimNode(nnkStmtList)
   vtableInitBody.add(newNimNode(nnkLetSection).add(
     newNimNode(nnkIdentDefs).add(newIdentNode("res"), newEmptyNode(),
-                                 newCall(bindSym"new", vtableName))))
+                                 newCall(bindSym"createVtable", vtableExpr))))
   let callWrappers = newNimNode(nnkStmtList)
 
   for arg in body:
@@ -39,18 +65,6 @@ macro defiface*(name: untyped, body: untyped): stmt {.immediate.} =
 
       funcName = newIdentNode($funcName.ident)
 
-      # Generate check for concept
-      let callArgList = newNimNode(nnkCall)
-      callArgList.add funcName
-      callArgList.add newIdentNode("x")
-      for arg in args:
-        if arg.kind != nnkExprColonExpr:
-          error("invalid argument ($1 expected nnkExprColonExpr)" % [$arg.kind])
-        callArgList.add arg[1]
-
-      genericBody.add(newNimNode(nnkInfix).add(newIdentNode("is"),
-                                 callArgList, ret))
-
       # Generate vtable type
       let vtableArgs = newNimNode(nnkFormalParams).add(ret)
       vtableArgs.add(newNimNode(nnkIdentDefs).add(newIdentNode(!"self"), newIdentNode(!"RootRef"), newEmptyNode()))
@@ -66,7 +80,7 @@ macro defiface*(name: untyped, body: untyped): stmt {.immediate.} =
       let vtableFunc = quote do:
         res.`funcName` = proc(self: RootRef): void {.cdecl.} =
                                 mixin funcName
-                                funcName(cast[T](self))
+                                funcName(cast[IMPL](self))
 
       let vtableFuncBody = vtableFunc[0][1]
 
@@ -87,8 +101,8 @@ macro defiface*(name: untyped, body: untyped): stmt {.immediate.} =
 
       # Generate call wrappers
       let wrapper = quote do:
-        proc `funcName`*(self: `iname`): `ret` {.inline.} =
-          self.vtable.`funcName`(self.obj)
+        proc `funcName`*[](self: `nameExpr`): `ret` {.inline.} =
+          cast[`vtableExpr`](cast[Interface](self).vtable).`funcName`(cast[Interface](self).obj)
 
       for arg in args:
         wrapper[0][3].add(newNimNode(nnkIdentDefs).add(arg[0], arg[1], newEmptyNode()))
@@ -96,42 +110,53 @@ macro defiface*(name: untyped, body: untyped): stmt {.immediate.} =
       for arg in args:
         wrapper[0][6][0].add(arg[0])
 
+      addGenericParams(wrapper[0][2])
       callWrappers.add wrapper
     elif arg.kind == nnkCommand:
       discard
     else:
       error("invalid statement in interface specification")
 
-  let converterName = newIdentNode("asI" & nameStr)
+  let converterName = newIdentNode("as" & nameStr)
   vtableInitBody.add(newNimNode(nnkReturnStmt).add(newIdentNode("res")))
 
-  result = quote do:
-    type
-      `name`* = concept x
-        `genericBody`
-
-    `vtableBody`
-
-    type
-      `iname`* = object
-        obj: RootRef
-        vtable: `vtableName`
-
-    proc initVtableFor[T](impl: typedesc[T], iface: typedesc[`iname`]): `vtableName` =
+  let initVtableForFunc = quote do:
+    proc initVtableFor[IMPL](impl: typedesc[IMPL], iface: typedesc[`nameExpr`]): `vtableExpr` =
       `vtableInitBody`
 
-    proc getVtableFor*[T](impl: typedesc[T], t: typedesc[`iname`]): `vtableName` {.inline.} =
-      var vtable {.global.} = initVtableFor(T, `iname`)
+  addGenericParams(initVtableForFunc[0][2])
+
+  let converterFunc = quote do:
+    proc `converterName`*[IMPL](a: IMPL): `nameExpr` =
+      when IMPL is not RootRef:
+        static: error("interface implementation objects have to inherit from RootObj")
+      var res: Interface
+      res.vtable = getVtableFor(IMPL, `nameExpr`)
+      res.obj = RootRef(a)
+      return `nameExpr`(res)
+
+  addGenericParams(converterFunc[0][2])
+
+  for node in genericParams:
+    let typ = newNimNode(nnkBracketExpr).add(newIdentNode("typedesc"), node)
+    converterFunc[0][3].add(newNimNode(nnkIdentDefs).add(genSym(nskParam), typ, newNimNode(nnkEmpty)))
+
+  let getVtableForFunc = quote do:
+    proc getVtableFor*[IMPL](impl: typedesc[IMPL], t: typedesc[`nameExpr`]): auto {.inline.} =
+      var vtable {.global.} = initVtableFor(IMPL, `nameExpr`)
       return vtable
 
-    proc `converterName`*(a: any): `iname` =
-      var res: `iname`
-      res.vtable = getVtableFor(type(a), `iname`)
-      res.obj = cast[RootRef](a)
-      return res
+  addGenericParams(getVtableForFunc[0][2])
 
+  result = quote do:
+    `vtableBody`
+
+    `initVtableForFunc`
+    `getVtableForFunc`
+    `converterFunc`
     `callWrappers`
 
+  # result.repr.echo
   result = result.copyNimTree
 
 proc implements*(ty: typedesc, superty: typedesc) =
