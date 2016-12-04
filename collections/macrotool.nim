@@ -49,3 +49,8 @@ proc symToExpr*(val: NimNode, depth=false): NimNode =
       result.add symToExpr(item, true)
   else:
     return nil
+
+proc `[]`*(node: NimNode, s: Slice): seq[NimNode] =
+  result = @[]
+  for i in s:
+    result.add(node[i])

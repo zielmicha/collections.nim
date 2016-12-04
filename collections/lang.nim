@@ -24,3 +24,20 @@ proc flatten*[T](a: seq[seq[T]]): seq[T] =
   result = @[]
   for subseq in a:
     result &= subseq
+
+proc nilToEmpty*(a: string): string =
+  if a == nil:
+    return ""
+  else:
+    return a
+
+template forwardRefImpl*(ty, tyImpl) =
+  ## Marks type `tyImpl` as implementation of forward reference type
+  ## `ty`. `ty` should be defined as `distinct RootRef` and `tyImpl` should
+  ## by `ref object of RootObj`.
+
+  converter `to ty`*(v: `tyImpl`): `ty` =
+    return cast[`ty`](v)
+
+  converter `to tyImpl`*(v: `ty`): `tyImpl` =
+    return cast[`tyImpl`](v)

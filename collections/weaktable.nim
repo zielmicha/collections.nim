@@ -1,5 +1,7 @@
 import collections/weakref, tables, macros
 
+export weakref
+
 type
   WeakValueTable*[K, V] = ref object of WeakRefable
     t: Table[K, WeakRef[V]]
@@ -13,6 +15,9 @@ proc newWeakValueTable*[K, V](self: var WeakValueTable[K, V]) =
 
   self = newWeakRefable(type(self))
   self.t = initTable[K, WeakRef[V]]()
+
+proc newWeakValueTable*[K, V](): WeakValueTable[K, V] =
+  newWeakValueTable(result)
 
 proc `$`*(self: WeakValueTable): string =
   var s = "WeakValueTable ("
@@ -29,7 +34,10 @@ proc `[]`*[K, V](self: WeakValueTable[K, V], k: K): V =
 proc len*(self: WeakValueTable): int =
   return self.t.len
 
-proc addKey*[K, V](self: WeakValueTable[K, V], k: K): V =
+proc del*[K, V](self: WeakValueTable[K, V], k: K) =
+  del(self.t, k)
+
+proc addKey*[K, V](self: WeakValueTable[K, V], k: K, freeCallback: proc(v: V)=nil): V =
   let weakSelf = self.weakRef
 
   proc free(r: pointer) =
@@ -38,6 +46,9 @@ proc addKey*[K, V](self: WeakValueTable[K, V], k: K): V =
 
     if k in self.t and cast[pointer](self.t[k].rawPointer) == nil:
       del self.t, k
+
+    if freeCallback != nil:
+      freeCallback(cast[V](r))
 
   let r = newWeakRefable(V, free)
   self.t[k] = r.weakRef

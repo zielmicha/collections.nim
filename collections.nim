@@ -1,5 +1,5 @@
-import collections/bytes, collections/random, collections/lang, collections/misc
-export bytes, random, lang, misc
+import collections/bytes, collections/random, collections/lang, collections/misc, collections/pprint
+export bytes, random, lang, misc, pprint
 
 import future
 export future.`=>`, future.`->`

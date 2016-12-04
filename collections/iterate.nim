@@ -1,7 +1,7 @@
 import collections/base
 import macros, options, algorithm
 
-macro multifuncIterator*(b): stmt =
+macro multifuncIterator*(b): untyped =
   ## Iterator that is closure and inline at the same time, depending on the context.
   ##
   ## Example:
@@ -41,7 +41,7 @@ type
   # this should be a concept in future, but they are too buggy now
   Iterable*[T] = Iterator[T] | seq[T]
 
-template wrapIterable*(typ): stmt =
+template wrapIterable*(typ): untyped =
   ## Creates closure version of `items` for type that already has `inline` version.
   converter items*[T](s: typ[T]): Iterator[T] =
     return iterator(): T {.closure.} =
@@ -174,7 +174,7 @@ proc someTrue*(i: Iterable[bool]): bool =
   for item in i:
     result = result or item
 
-template iteratorToSeq*(iter: expr): expr {.immediate.} =
+template iteratorToSeq*(iter: untyped): expr =
   var res: seq[type(iter)] = @[]
   for x in iter:
     res.add(x)

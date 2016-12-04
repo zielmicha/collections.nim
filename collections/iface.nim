@@ -31,8 +31,11 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
       discard
 
   template addGenericParams(place) =
-    for node in genericParams:
-      place.add(newNimNode(nnkIdentDefs).add(node, newNimNode(nnkEmpty), newNimNode(nnkEmpty)))
+    if place.len == 0 and genericParams.len == 0:
+      place = newNimNode(nnkEmpty)
+    else:
+      for node in genericParams:
+        place.add(newNimNode(nnkIdentDefs).add(node, newNimNode(nnkEmpty), newNimNode(nnkEmpty)))
 
   # add generic parameters to type decl
   addGenericParams(vtableBody[0][0][1])
@@ -114,6 +117,8 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
       callWrappers.add wrapper
     elif arg.kind == nnkCommand:
       discard
+    elif arg.kind == nnkCommentStmt:
+      discard
     else:
       error("invalid statement in interface specification")
 
@@ -135,7 +140,16 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
       res.obj = RootRef(a)
       return `nameExpr`(res)
 
+    proc asInterface*[IMPL](a: IMPL, t: typedesc[`nameExpr`]): `nameExpr` =
+      when IMPL is not RootRef:
+        static: error("interface implementation objects have to inherit from RootObj")
+      var res: Interface
+      res.vtable = getVtableFor(IMPL, `nameExpr`)
+      res.obj = RootRef(a)
+      return `nameExpr`(res)
+
   addGenericParams(converterFunc[0][2])
+  addGenericParams(converterFunc[1][2])
 
   for node in genericParams:
     let typ = newNimNode(nnkBracketExpr).add(newIdentNode("typedesc"), node)
@@ -156,8 +170,14 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
     `converterFunc`
     `callWrappers`
 
+    proc pprint*(self: `name`): string =
+      return pprintInterface(self)
+
   # result.repr.echo
   result = result.copyNimTree
+
+proc pprintInterface*[T](self: T): string =
+  return "Interface " & name(T)
 
 proc implements*(ty: typedesc, superty: typedesc) =
   static:
