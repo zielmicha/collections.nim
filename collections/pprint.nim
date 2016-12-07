@@ -1,11 +1,20 @@
 ## This module provider `pprint` function that handles pretty printing of objects.
-import typetraits, future, strutils, macros
+import typetraits, future, strutils, macros, tables
 import collections/iterate, collections/macrotool
+
+template compilesOr(obj, otherwise): untyped =
+  when compiles(obj):
+    obj
+  else:
+    otherwise
+
+proc privateGuard(obj: NimNode): NimNode {.compiletime.} =
+  return newCall(bindSym"compilesOr", obj, newStrLitNode("(private)"))
 
 proc addField(obj: NimNode, k: string): NimNode {.compiletime.} =
   let pair = newNimNode(nnkPar).add(
     newStrLitNode(k),
-    newCall(newIdentNode("pprint"), newDotExpr(obj, newIdentNode(k))))
+    newCall(newIdentNode("pprint"), privateGuard(newDotExpr(obj, newIdentNode(k)))))
   return newCall(newIdentNode("add"), newIdentNode("result"), pair)
 
 proc addFieldsBranch(obj: NimNode, typ: NimNode): NimNode {.compiletime.} =
@@ -29,13 +38,16 @@ proc addFieldsBranch(obj: NimNode, typ: NimNode): NimNode {.compiletime.} =
 macro objFieldsAdd(obj: typed): typed =
   var t = getType(obj)
 
+  if t.kind == nnkSym:
+    t = t.getType
+
   if t.kind == nnkBracketExpr:
     let typePrefix = $(t[0])
     if typePrefix != "ref" or t.len != 2:
       error("unknown type definition")
     t = t[1].getType
 
-  if t.kind != nnkObjectTy and t[2].kind != nnkRecList:
+  if t.kind != nnkObjectTy or t[2].kind != nnkRecList:
     error("unknown type definition")
 
   let body = newNimNode(nnkStmtList)
@@ -84,5 +96,16 @@ proc pprint*[T](obj: T): string =
   elif T is ref object:
     if obj == nil: return "nil"
     return pprintObject("", obj)
+  elif T is (proc):
+    return name(T)
   else:
     return obj.repr
+
+proc pprint*[K, V](t: Table[K, V]): string =
+  var values: seq[string] = @[]
+  for k, v in t:
+    values.add(pprint(k) & ": " & pprint(v))
+  return "{" & values.join(", ") & "}"
+
+proc pprint*[K, V](t: ref Table[K, V]): string =
+  return pprint(t[])

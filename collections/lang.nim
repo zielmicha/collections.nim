@@ -5,6 +5,8 @@ proc nothing*() {.procvar.} = return
 
 proc nothing1*[T](t: T) {.procvar.} = return
 
+proc defaultVal*[T](t: typedesc[T]): T = discard
+
 template returnMaybeVoid*(e: expr): stmt =
   if type(e) is void:
     e

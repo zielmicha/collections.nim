@@ -1,9 +1,13 @@
-import collections/misc, collections/macrotool
+import collections/misc, collections/macrotool, collections/reflect
 import macros, strutils, typetraits
 
-type Interface* = object
-  vtable*: pointer
-  obj*: RootRef
+type
+  SomeVtable = object
+    typeIndex: int
+
+  Interface* = object
+    vtable*: pointer
+    obj*: RootRef
 
 proc createVtable[T](ty: typedesc[T]): T =
   var tab: T
@@ -28,7 +32,7 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
 
   let vtableBody = quote do:
     type `vtableDeclExpr`[] = ptr object
-      discard
+      typeIndex: int
 
   template addGenericParams(place) =
     if place.len == 0 and genericParams.len == 0:
@@ -41,7 +45,6 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
   addGenericParams(vtableBody[0][0][1])
 
   let vtableInner = vtableBody[0][0][2][0][2]
-  vtableInner.del(0) # del discard
 
   let vtableInitBody = newNimNode(nnkStmtList)
   vtableInitBody.add(newNimNode(nnkLetSection).add(
@@ -170,17 +173,28 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
     `converterFunc`
     `callWrappers`
 
+    proc isInterface*(self: `name`) = discard
+
     proc pprint*(self: `name`): string =
       return pprintInterface(self)
 
   # result.repr.echo
   result = result.copyNimTree
 
+type
+  SomeInterface = generic x
+    isInterface(x)
+
 proc pprintInterface*[T](self: T): string =
   return "Interface " & name(T)
+
+proc isNil*(a: SomeInterface): bool =
+  return a.Interface.vtable == nil
 
 proc implements*(ty: typedesc, superty: typedesc) =
   static:
     if not (ty is superty):
       error(name(ty) & " doesn't implement " & name(superty))
 
+proc getImpl*(iface: SomeInterface): RootRef =
+  return iface.Interface.obj
