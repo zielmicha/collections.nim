@@ -1,4 +1,4 @@
-import collections/iface
+import collections/iface, future, typetraits
 
 when isMainModule:
   type Duck[T] = distinct Interface
@@ -16,3 +16,10 @@ when isMainModule:
   let duck: Duck[float] = asDuck(duckImpl, float)
   assert duck.quack("1", 2) == 5
   assert duck.bar() == 5.0
+
+  let inlineDuckImpl = DuckInlineImpl[float](
+    quack: (proc (foo: string, bar: int): int = 5),
+    bar: (() => 6.0)
+  )
+  let inlineDuck: Duck[float] = asDuck(inlineDuckImpl, float)
+  assert inlineDuck.bar() == 6.0

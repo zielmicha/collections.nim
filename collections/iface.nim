@@ -2,9 +2,6 @@ import collections/misc, collections/macrotool, collections/reflect
 import macros, strutils, typetraits
 
 type
-  SomeVtable = object
-    typeIndex: int
-
   Interface* = object
     vtable*: pointer
     obj*: RootRef
@@ -13,45 +10,16 @@ proc createVtable[T](ty: typedesc[T]): T =
   var tab: T
   return cast[T](allocShared0(sizeof(tab[]) * 100))
 
-macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
+proc debugType[T](name: string, t: typedesc[T]) =
+  echo name, " ", name(T)
 
-  var genericParams: seq[NimNode] = @[]
-  var nameStr: string
+### Code generation
 
-  if nameExpr.kind == nnkBracketExpr:
-    nameStr = $nameExpr[0].ident
-    for node in nameExpr: genericParams.add node
-    genericParams.del(0)
-  else:
-    nameStr = $nameExpr.ident
+type
+  InterfaceFunc = tuple[name: NimNode, args: NimNode, returnExpr: NimNode]
 
-  let name = newIdentNode(nameStr) # Duck
-  let vtableName = newIdentNode(nameStr & "VTable") # DuckVTable
-  let vtableExpr = newTypeInstance(vtableName, genericParams) # DuckVTable[T]
-  let vtableDeclExpr = publicIdent(vtableName) # DuckVTable*
-
-  let vtableBody = quote do:
-    type `vtableDeclExpr`[] = ptr object
-      typeIndex: int
-
-  template addGenericParams(place) =
-    if place.len == 0 and genericParams.len == 0:
-      place = newNimNode(nnkEmpty)
-    else:
-      for node in genericParams:
-        place.add(newNimNode(nnkIdentDefs).add(node, newNimNode(nnkEmpty), newNimNode(nnkEmpty)))
-
-  # add generic parameters to type decl
-  addGenericParams(vtableBody[0][0][1])
-
-  let vtableInner = vtableBody[0][0][2][0][2]
-
-  let vtableInitBody = newNimNode(nnkStmtList)
-  vtableInitBody.add(newNimNode(nnkLetSection).add(
-    newNimNode(nnkIdentDefs).add(newIdentNode("res"), newEmptyNode(),
-                                 newCall(bindSym"createVtable", vtableExpr))))
-  let callWrappers = newNimNode(nnkStmtList)
-
+proc parseInterfaceBody(body: NimNode): seq[InterfaceFunc] {.compiletime.} =
+  result = @[]
   for arg in body:
     if arg.kind == nnkCall:
       let left = arg[0]
@@ -71,59 +39,131 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
 
       funcName = newIdentNode($funcName.ident)
 
-      # Generate vtable type
-      let vtableArgs = newNimNode(nnkFormalParams).add(ret)
-      vtableArgs.add(newNimNode(nnkIdentDefs).add(newIdentNode(!"self"), newIdentNode(!"RootRef"), newEmptyNode()))
-      for arg in args:
-        vtableArgs.add(newNimNode(nnkIdentDefs).add(arg[0], arg[1], newEmptyNode()))
-
-      let vtableProcType = newNimNode(nnkProcTy).add(
-        vtableArgs,
-        newNimNode(nnkPragma).add(newIdentNode("cdecl")))
-      vtableInner.add(newNimNode(nnkIdentDefs).add(funcName.copyNimTree, vtableProcType, newEmptyNode()))
-
-      # Generate vtable body
-      let vtableFunc = quote do:
-        res.`funcName` = proc(self: RootRef): void {.cdecl.} =
-                                mixin funcName
-                                funcName(cast[IMPL](self))
-
-      let vtableFuncBody = vtableFunc[0][1]
-
-      let vtableFuncFormalParams = vtableFuncBody[3]
-      vtableFuncFormalParams[0] = ret.copyNimTree
-      for arg in args:
-        vtableFuncFormalParams.add(newNimNode(nnkIdentDefs).add(arg[0], arg[1], newEmptyNode()))
-
-      # `mixin` is removed by quote, we need to readd it
-      vtableFuncBody[6][0] = newNimNode(nnkMixinStmt).add(funcName)
-
-      let vtableFuncCall = vtableFuncBody[6][1]
-      vtableFuncCall[0] = funcName
-      for arg in args:
-        vtableFuncCall.add(arg[0])
-
-      vtableInitBody.add(vtableFunc)
-
-      # Generate call wrappers
-      let wrapper = quote do:
-        proc `funcName`*[](self: `nameExpr`): `ret` {.inline.} =
-          cast[`vtableExpr`](cast[Interface](self).vtable).`funcName`(cast[Interface](self).obj)
-
-      for arg in args:
-        wrapper[0][3].add(newNimNode(nnkIdentDefs).add(arg[0], arg[1], newEmptyNode()))
-
-      for arg in args:
-        wrapper[0][6][0].add(arg[0])
-
-      addGenericParams(wrapper[0][2])
-      callWrappers.add wrapper
+      result.add((funcName, args, ret).InterfaceFunc)
     elif arg.kind == nnkCommand:
       discard
     elif arg.kind == nnkCommentStmt:
       discard
     else:
       error("invalid statement in interface specification")
+
+proc parseInterfaceName(nameExpr: NimNode): tuple[nameStr: string, genericParams: seq[NimNode]] =
+  var genericParams: seq[NimNode] = @[]
+  var nameStr: string
+
+  if nameExpr.kind == nnkBracketExpr:
+    nameStr = $nameExpr[0].ident
+    for node in nameExpr: genericParams.add node
+    genericParams.del(0)
+  else:
+    nameStr = $nameExpr.ident
+
+  return (nameStr, genericParams)
+
+macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
+  let (nameStr, genericParams) = parseInterfaceName(nameExpr)
+  let name = newIdentNode(nameStr) # Duck
+
+  let vtableName = newIdentNode(nameStr & "VTable") # DuckVTable
+  let vtableExpr = newTypeInstance(vtableName, genericParams) # DuckVTable[T]
+  let vtableDeclExpr = publicIdent(vtableName) # DuckVTable*
+
+  let inlineImplName = newIdentNode(nameStr & "InlineImpl")
+  let inlineImplDeclExpr = publicIdent(inlineImplName) # DuckInlineImpl*
+  let inlineImplExpr = newTypeInstance(inlineImplName, genericParams) # DuckInlineImpl[T]
+
+  template addGenericParams(place) =
+    if place.len == 0 and genericParams.len == 0:
+      place = newNimNode(nnkEmpty)
+    else:
+      for node in genericParams:
+        place.add(newNimNode(nnkIdentDefs).add(node, newNimNode(nnkEmpty), newNimNode(nnkEmpty)))
+
+  let vtableBody = quote do:
+    type `vtableDeclExpr`[] = ptr object
+      typeIndex: int
+
+  let inlineImplBody = quote do:
+    type `inlineImplDeclExpr`[] = ref object of RootObj
+      discard
+
+  # add generic parameters to type decl
+  addGenericParams(vtableBody[0][0][1])
+  addGenericParams(inlineImplBody[0][0][1])
+
+  let vtableInner = vtableBody[0][0][2][0][2]
+  let inlineImplInner = inlineImplBody[0][0][2][0][2]
+  inlineImplInner.del(0) # remove discard
+
+  let vtableInitBody = newNimNode(nnkStmtList)
+  vtableInitBody.add(newNimNode(nnkLetSection).add(
+    newNimNode(nnkIdentDefs).add(newIdentNode("res"), newEmptyNode(),
+                                 newCall(bindSym"createVtable", vtableExpr))))
+  let callWrappers = newNimNode(nnkStmtList)
+
+  let functions: seq[InterfaceFunc] = parseInterfaceBody(body)
+
+  for function in functions:
+    let (funcName, args, ret) = function
+
+    # Generate functions in vtable type
+    let vtableArgs = newNimNode(nnkFormalParams).add(ret)
+    vtableArgs.add(newNimNode(nnkIdentDefs).add(newIdentNode(!"self"), newIdentNode(!"RootRef"), newEmptyNode()))
+    for arg in args:
+      vtableArgs.add(newNimNode(nnkIdentDefs).add(arg[0], arg[1], newEmptyNode()))
+
+    let vtableProcType = newNimNode(nnkProcTy).add(
+      vtableArgs,
+      newNimNode(nnkPragma).add(newIdentNode("cdecl")))
+    vtableInner.add(newNimNode(nnkIdentDefs).add(funcName.copyNimTree, vtableProcType, newEmptyNode()))
+
+    # Generate vtable body
+    let vtableFunc = quote do:
+      res.`funcName` = proc(self: RootRef): void {.cdecl.} =
+                           mixin funcName
+                           (self.IMPL).funcName() # cast[IMPL](self)
+
+    let vtableFuncBody = vtableFunc[0][1]
+
+    let vtableFuncFormalParams = vtableFuncBody[3]
+    vtableFuncFormalParams[0] = ret.copyNimTree
+    for arg in args:
+      vtableFuncFormalParams.add(newNimNode(nnkIdentDefs).add(arg[0], arg[1], newEmptyNode()))
+
+    # `mixin` is removed by quote, we need to readd it
+    vtableFuncBody[6][0] = newNimNode(nnkMixinStmt).add(funcName)
+
+    let vtableFuncCall = vtableFuncBody[6][1]
+    # vtableFuncCall.treeRepr.echo
+    vtableFuncCall[0][1] = funcName
+    #vtableFuncCall[0] = funcName
+    for arg in args:
+      vtableFuncCall.add(arg[0])
+
+    vtableInitBody.add(vtableFunc)
+
+    # Generate call wrappers
+    let wrapper = quote do:
+      proc `funcName`*[](self: `nameExpr`): `ret` {.inline.} =
+        cast[`vtableExpr`](cast[Interface](self).vtable).`funcName`(cast[Interface](self).obj)
+
+    for arg in args:
+      wrapper[0][3].add(newNimNode(nnkIdentDefs).add(arg[0], arg[1], newEmptyNode()))
+
+    for arg in args:
+      wrapper[0][6][0].add(arg[0])
+
+    addGenericParams(wrapper[0][2])
+    callWrappers.add wrapper
+
+    # Generate functions in inline impl type
+    let inlineImplArgs = newNimNode(nnkFormalParams).add(ret)
+    for arg in args:
+      inlineImplArgs.add(newNimNode(nnkIdentDefs).add(arg[0], arg[1], newEmptyNode()))
+
+    let inlineImplProcType = newNimNode(nnkProcTy).add(
+      inlineImplArgs, newNimNode(nnkEmpty))
+    inlineImplInner.add(newNimNode(nnkIdentDefs).add(publicIdent(funcName).copyNimTree, inlineImplProcType, newEmptyNode()))
 
   let converterName = newIdentNode("as" & nameStr)
   vtableInitBody.add(newNimNode(nnkReturnStmt).add(newIdentNode("res")))
@@ -160,13 +200,15 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
 
   let getVtableForFunc = quote do:
     proc getVtableFor*[IMPL](impl: typedesc[IMPL], t: typedesc[`nameExpr`]): auto {.inline.} =
-      var vtable {.global.} = initVtableFor(IMPL, `nameExpr`)
+      # inject is needed of `vtable` will have only one instantation for all generic variants
+      var vtable {.global, inject.} = initVtableFor(IMPL, `nameExpr`)
       return vtable
 
   addGenericParams(getVtableForFunc[0][2])
 
   result = quote do:
     `vtableBody`
+    `inlineImplBody`
 
     `initVtableForFunc`
     `getVtableForFunc`
@@ -182,7 +224,7 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
   result = result.copyNimTree
 
 type
-  SomeInterface = generic x
+  SomeInterface = concept x
     isInterface(x)
 
 proc pprintInterface*[T](self: T): string =
