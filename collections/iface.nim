@@ -224,7 +224,7 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
   result = result.copyNimTree
 
 type
-  SomeInterface = concept x
+  SomeInterface* = concept x
     isInterface(x)
 
 proc pprintInterface*[T](self: T): string =
