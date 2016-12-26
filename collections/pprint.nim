@@ -1,4 +1,4 @@
-## This module provider `pprint` function that handles pretty printing of objects.
+## This module provides `pprint` function that handles pretty printing of objects.
 import typetraits, future, strutils, macros, tables
 import collections/iterate, collections/macrotool
 

@@ -1,4 +1,4 @@
-import collections/base
+import collections/lang
 import macros, options, algorithm
 
 macro multifuncIterator*(b): untyped =
@@ -195,6 +195,17 @@ proc findOne*[T](i: Iterable[T], function: (proc(t: T): bool)): Option[T] =
       return some(item)
   return none(T)
 
+proc argmax*[T](s: seq[T]): int =
+  assert s.len > 0
+
+  var maxArg = 0
+  var maxItem = s[0]
+  for i in 1..<s.len:
+    if s[i] > maxItem:
+      maxArg = i
+      maxItem = s[i]
+  return maxArg
+  
 when isMainModule:
   iterator foo(foo: int): int {.multifuncIterator.} =
      yield foo

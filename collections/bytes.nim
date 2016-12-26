@@ -13,6 +13,7 @@ proc toBinaryString*[T: array](s: T): string =
   copyMem(result.cstring, unsafeAddr(s), size)
 
 proc setAt*(s: var string, at: int, data: string) =
+  ## Put ``data`` at position ``at`` of string ``s``.
   doAssert(s.len >= data.len + at)
   copyMem(cast[pointer](cast[int](addr s[0]) + at), data.cstring, data.len)
 
@@ -40,12 +41,12 @@ proc convertEndian(size: static[int], dst: pointer, src: pointer, endian=bigEndi
       else:
         {.error: "Unsupported size".}
 
-proc pack*[T](v: T, endian=bigEndian): string {.inline.} =
+proc pack*[T](v: T, endian: Endianness): string {.inline.} =
   ## Converts scalar `v` into a binary string with specific endianness.
   result = newString(sizeof(v))
   convertEndian(sizeof(T), addr result[0], unsafeAddr v, endian=endian)
 
-proc unpack*[T](v: string, t: typedesc[T], endian=bigEndian): T {.inline.} =
+proc unpack*[T](v: string, t: typedesc[T], endian: Endianness): T {.inline.} =
   ## Converts binary string to scalar type `t` with specific endianness.
   if v.len < sizeof(T):
     raise newException(ValueError, "buffer too small")
