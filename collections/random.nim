@@ -1,6 +1,7 @@
 import collections/bytes
 
 proc urandom*(len: int): string =
+  ## Generate secure random string of length len.
   var f = open("/dev/urandom")
   defer: f.close
   result = ""
@@ -10,4 +11,5 @@ proc urandom*(len: int): string =
     raise newException(IOError, "cannot read random bytes")
 
 proc hexUrandom*(len: int): string =
+  ## Generate secure hex random string of length 2*len.
   urandom(len).encodeHex

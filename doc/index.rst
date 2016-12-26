@@ -47,6 +47,10 @@ Utilities
 
   Do various things to byte strings.
 
+- ``collections/random`` (`API docs <api/collections/random.html>`_)
+
+  Generate randomness.
+
 
 Data structures
 =========

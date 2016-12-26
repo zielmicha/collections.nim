@@ -1,3 +1,27 @@
+## This module allow creation of interface types. Every interface type has a set of methods that can be called on it. Every object can be converted at runtime to the interface type, provided that there are procs that implement all interface methods.
+##
+## Example
+## =======
+##
+## .. code-block:: nim
+##   # Define interface type Duck
+##   type Duck = distinct Interface
+##
+##   interfaceMethods Duck:
+##     quack(number: int): string
+##
+##   # Make implementation of Duck interface
+##   # Implementation objects have to inherit from RootRef.
+##   type AmericanDuck = ref object of RootObj
+##     name: string
+##
+##   proc quack(d: AmericanDuck, number: int): string =
+##     return "duck " & d.name & " quacks " & $number & " times"
+##
+##   let myDuck: AmericanDuck = AmericanDuck(name: name)
+##   let myDuckAsInterface: Duck = myDuck.asDuck # or myDuck.asInterface[Duck]
+## ```
+
 import collections/misc, collections/macrotool, collections/reflect
 import macros, strutils, typetraits
 
@@ -10,10 +34,7 @@ proc createVtable[T](ty: typedesc[T]): T =
   var tab: T
   return cast[T](allocShared0(sizeof(tab[]) * 100))
 
-proc debugType[T](name: string, t: typedesc[T]) =
-  echo name, " ", name(T)
-
-### Code generation
+# Code generation
 
 type
   InterfaceFunc = tuple[name: NimNode, args: NimNode, returnExpr: NimNode]
@@ -61,6 +82,7 @@ proc parseInterfaceName(nameExpr: NimNode): tuple[nameStr: string, genericParams
   return (nameStr, genericParams)
 
 macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
+  ## Declare method list of an interface type. (The type should be declared before in a type section as ``ExampleType = distinct Interface``).
   let (nameStr, genericParams) = parseInterfaceName(nameExpr)
   let name = newIdentNode(nameStr) # Duck
 
@@ -225,6 +247,7 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
 
 type
   SomeInterface* = concept x
+    ## Typeclass that matches every interface.
     isInterface(x)
 
 proc pprintInterface*[T](self: T): string =
@@ -239,4 +262,5 @@ proc implements*(ty: typedesc, superty: typedesc) =
       error(name(ty) & " doesn't implement " & name(superty))
 
 proc getImpl*(iface: SomeInterface): RootRef =
+  ## Returns implementation object of this interface.
   return iface.Interface.obj

@@ -5,7 +5,7 @@ type
     ## Weak reference pointing to object of type T.
     target: pointer
 
-  FreeCallback = proc(r: pointer)
+  FreeCallback* = proc(r: pointer)
 
   WeakRefable* = object of RootObj
     ## Inherit from this object to enable taking weak references from it. You also need to use
@@ -22,6 +22,7 @@ proc freeWeakRefable[T](v: ref T) =
     v.freeCallback(addr v[])
 
 proc newWeakRefable*[T](typ: typedesc[ref T], freeCallback: FreeCallback=nil): ref T =
+  ## Create a new object of type T. Invoke ``freeCallback`` when the object is freed.
   static:
     if not (T is WeakRefable):
       error(name(T) & " has to inherit from WeakRefable")
@@ -33,15 +34,21 @@ proc newWeakRefable*[T](typ: typedesc[ref T], freeCallback: FreeCallback=nil): r
   return val
 
 proc weakRef*[T: ref WeakRefable](t: T): WeakRef[T] =
+  ## Convert a strong reference to a weak reference.
   return cast[WeakRef[T]](t.weakRef)
 
 proc rawPointer*[T](r: WeakRef[ref T]): pointer =
+  ## Get object pointer to by this weak reference as a raw pointer.
   return r.target
 
 proc isAlive*[T](r: WeakRef[ref T]): bool =
+  ## Check if this weak reference points to an object that is alive.
   return r.target != nil
 
 proc lock*[T](r: WeakRef[ref T]): ref T =
+  ## Convert a weak reference to a strong reference.
+  ##
+  ## Raises exception if object is not alive.
   if r.target == nil:
     raise newException(Exception, "weakref has already died")
   return cast[ref T](r.target) # guaranteed to be safe

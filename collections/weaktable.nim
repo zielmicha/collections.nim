@@ -38,6 +38,8 @@ proc del*[K, V](self: WeakValueTable[K, V], k: K) =
   del(self.t, k)
 
 proc addKey*[K, V](self: WeakValueTable[K, V], k: K, freeCallback: proc(v: V)=nil): V =
+  ## Add a new item at key ``k`` to the table. Invoke ``freeCallback`` when there are no
+  ## more references to this item.
   let weakSelf = self.weakRef
 
   proc free(r: pointer) =

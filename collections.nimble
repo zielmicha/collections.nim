@@ -1,6 +1,6 @@
 [Package]
 name          = "collections"
-version       = "0.1.2"
+version       = "0.1.3"
 author        = "Michał Zieliński <michal@zielinscy.org.pl>"
 description   = "Various collections and utilities"
 license       = "MIT"
