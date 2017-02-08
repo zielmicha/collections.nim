@@ -35,6 +35,8 @@ proc addrView*(s: cstring, size: int): View[byte] =
 
 proc asView*(s: var string): auto = stringView(s)
 
+proc asUnsafeView*(s: string): auto = addrView(s, s.len)
+
 proc asView*(s: var seq): auto = seqView(s)
 
 template asByteView*(s): ByteView =
@@ -63,6 +65,10 @@ proc `[]`*[T](v: ConstView[T], i: int): T =
 proc `[]`*[T](v: View[T], i: int): var T =
   doAssert(i >= 0 and i < v.size)
   return ptrAdd[T](v.data, i)[]
+
+proc `[]=`*[T](v: View[T], i: int, val: T) =
+  doAssert(i >= 0 and i < v.size)
+  ptrAdd[T](v.data, i)[] = val
 
 proc slice*[T](v: SomeView[T], start: int, size: int): SomeView[T] =
   if start != 0:
@@ -114,3 +120,11 @@ proc clearIfReferenceType*[T](view: SomeView[T]) =
   when not (T is ScalarType):
     for i in 0..<view.size:
       ptrAdd[T](view.data, i)[] = defaultVal(T)
+
+proc alignedStringView*(s: var string, align=16): ByteView =
+  ## Return view into string ``s``. Align it to ``align`` bytes if needed.
+  let misaligned = cast[int](addr s[0]) mod align
+  if misaligned != 0:
+    s = " ".repeat(align - misaligned) & s
+    return s.stringView.slice(align - misaligned)
+  return s.stringView
