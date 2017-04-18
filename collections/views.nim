@@ -46,6 +46,9 @@ converter viewToConstView*[T](v: View[T]): ConstView[T] =
   result.data = v.data
   result.size = v.size
 
+proc isNil*(v: View): bool =
+  return v.data == nil
+
 proc len*(v: View): int =
   v.size
 
@@ -71,14 +74,18 @@ proc `[]=`*[T](v: View[T], i: int, val: T) =
   ptrAdd[T](v.data, i)[] = val
 
 proc slice*[T](v: SomeView[T], start: int, size: int): SomeView[T] =
-  if start != 0:
+  if size != 0:
     doAssert(start < v.len and start >= 0)
-  doAssert(size >= 0 and start + size <= v.len)
-  result.data = ptrAdd[T](v.data, start)
-  result.size = size
+    doAssert(start + size <= v.len)
+    doAssert(size >= 0)
+    result.data = ptrAdd[T](v.data, start)
+    result.size = size
+  else:
+    result.data = nil
+    result.size = 0
 
 proc slice*[T](v: SomeView[T], start: int): SomeView[T] =
-  assert start < v.len and start >= 0
+  assert start <= v.len and start >= 0
   return v.slice(start, v.len - start)
 
 type ScalarType = uint8 | uint16 | uint32 | uint64 | int8 | int16 | int32 | int64 | float32 | float64 | byte | char | enum
