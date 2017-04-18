@@ -1,4 +1,4 @@
-import future
+import future, macros
 
 export `->`, `=>`
 
@@ -20,7 +20,7 @@ proc nothing1*[T](t: T) {.procvar.} = return
 
 proc defaultVal*[T](t: typedesc[T]): T = discard
 
-template returnMaybeVoid*(e: expr): stmt =
+template returnMaybeVoid*(e: typed): untyped =
   if type(e) is void:
     e
     return
@@ -56,3 +56,28 @@ template forwardRefImpl*(ty, tyImpl) =
 
   converter `to tyImpl`*(v: `ty`): `tyImpl` =
     return cast[`tyImpl`](v)
+
+proc forceNoClosure[T](p: T): T {.inline.} =
+  # Doesn't work due to Nim bug
+  # assert sizeof(p) == 8
+  return p
+
+macro bindOnlyVars*(vars: untyped, code: untyped): untyped =
+  if vars.kind != nnkBracket:
+    error("expected bindOnlyVars([varname1, varname2, ...], code)")
+
+  var params: seq[NimNode] = @[]
+  params.add(newIdentNode("auto")) # return value
+  for arg in vars:
+    params.add(newNimNode(nnkIdentDefs).add(arg,
+                                            # newIdentNode("auto"),
+                                            newCall("type", arg),
+                                            newEmptyNode()))
+
+  let p = newProc(newEmptyNode(), params=params, body=code,
+                                         procType=nnkLambda)
+  p[4] = newNimNode(nnkPragma).add(newIdentNode("nimcall"))
+  let call = newNimNode(nnkCall).add(newCall(bindSym"forceNoClosure", p))
+  for arg in vars:
+    call.add(arg)
+  return call
