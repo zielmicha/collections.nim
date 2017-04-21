@@ -6,7 +6,7 @@ Introduction
 =========
 
 *collections.nim* is a collections of utilities and datastructures for Nim language.
-*collections.nim* consists of several mostly independed modules.
+*collections.nim* consists of several mostly independent modules.
 
 
 Language extensions
