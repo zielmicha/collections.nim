@@ -1,4 +1,4 @@
-import endians, strutils
+import endians, strutils, base64
 
 proc byteArray*(data: string, size: static[int]): array[size, byte] =
   ## Converts a string to a bytearray.
@@ -78,7 +78,7 @@ proc encodeHex*(s: string): string =
 
 proc decodeHex*(s: string): string =
   if s.len mod 2 == 1: raise newException(ValueError, "odd-length string")
-  let s = s.toLower
+  let s = s.toLowerAscii
 
   result = newString(int(s.len / 2))
   for i in 0..<int(s.len/2):
@@ -87,3 +87,14 @@ proc decodeHex*(s: string): string =
     if a == -1 or b == -1:
       raise newException(ValueError, "invalid hex digit")
     result[i] = char((a shl 4) or b)
+
+# Base64
+
+proc urlsafeBase64Encode*(s: string): string =
+  return base64.encode(s).replace('+', '-').replace('/', '_').strip(chars={'='})
+
+proc urlsafeBase64Decode*(s: string): string =
+  var d = s.replace('-', '+').replace('_', '/')
+  while len(d) mod 4 != 0:
+    d.add('=')
+  return base64.decode(d)
