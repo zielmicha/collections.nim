@@ -14,6 +14,7 @@ type
     freeCallback: FreeCallback
 
 proc freeWeakRefable[T](v: ref T) =
+  assert v != nil
   let wref = WeakRef[T](v.weakRef)
   if wref != nil:
     wref.target = nil
