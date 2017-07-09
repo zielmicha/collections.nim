@@ -27,12 +27,17 @@ import macros, strutils, typetraits
 
 type
   Interface* = object
-    vtable*: pointer
+    vtable*: ptr VTableBase
     obj*: RootRef
 
-proc createVtable[T](ty: typedesc[T]): T =
+  VTableBase* = object {.inheritable.}
+    typeName*: string
+
+proc createVtable[T, R](ty: typedesc[T], tyFor: typedesc[R]): T =
   var tab: T
-  return cast[T](allocShared0(sizeof(tab[]) * 100))
+  tab = cast[T](allocShared0(sizeof(tab[]) * 100))
+  tab.typeName = name(R)
+  return tab
 
 # Code generation
 
@@ -102,8 +107,8 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
         place.add(newNimNode(nnkIdentDefs).add(node, newNimNode(nnkEmpty), newNimNode(nnkEmpty)))
 
   let vtableBody = quote do:
-    type `vtableDeclExpr`[] = ptr object
-      typeIndex: int
+    type `vtableDeclExpr`[] = ptr object of VTableBase
+      discard
 
   let inlineImplBody = quote do:
     type `inlineImplDeclExpr`[] = ref object of RootObj
@@ -120,7 +125,7 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
   let vtableInitBody = newNimNode(nnkStmtList)
   vtableInitBody.add(newNimNode(nnkLetSection).add(
     newNimNode(nnkIdentDefs).add(newIdentNode("res"), newEmptyNode(),
-                                 newCall(bindSym"createVtable", vtableExpr))))
+                                 newCall(bindSym"createVtable", vtableExpr, newIdentNode("IMPL")))))
   let callWrappers = newNimNode(nnkStmtList)
 
   let functions: seq[InterfaceFunc] = parseInterfaceBody(body)
@@ -200,6 +205,8 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
     proc `converterName`*[IMPL](a: IMPL): `nameExpr` =
       when IMPL is not RootRef:
         static: error("interface implementation objects have to inherit from RootObj")
+      if a == nil:
+        raise newException(ValueError, "attempt to convert nil to interface")
       var res: Interface
       res.vtable = getVtableFor(IMPL, `nameExpr`)
       res.obj = RootRef(a)
@@ -208,6 +215,8 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
     proc asInterface*[IMPL](a: IMPL, t: typedesc[`nameExpr`]): `nameExpr` =
       when IMPL is not RootRef:
         static: error("interface implementation objects have to inherit from RootObj")
+      if a == nil:
+        raise newException(ValueError, "attempt to convert nil to interface")
       var res: Interface
       res.vtable = getVtableFor(IMPL, `nameExpr`)
       res.obj = RootRef(a)
@@ -251,7 +260,12 @@ type
     isInterface(x)
 
 proc pprintInterface*[T](self: T): string =
-  return "Interface " & name(T)
+  result = "Interface " & name(T)
+  let vtable = self.Interface.vtable
+  if vtable == nil:
+    result &= " nil"
+  else:
+    result &= " impl " & vtable.typeName
 
 proc isNil*(a: SomeInterface): bool =
   return a.Interface.vtable == nil

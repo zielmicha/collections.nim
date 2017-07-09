@@ -1,28 +1,38 @@
 import collections/weaktable, collections/weakref
 
 type
-  Foo = ref object of WeakRefable
+  FooObj = object
     v: int
 
-proc `$`*(f: Foo): string = return "Foo " & ($f.v)
+  Foo = WeakRefable[FooObj]
 
-var t: WeakValueTable[int, Foo]
+var t: WeakValueTable[int, FooObj]
 newWeakValueTable(t)
+
+proc `$`*(f: ref FooObj): string =
+  return "Foo " & ($f.v)
+
+proc `$`*(f: Foo): string =
+  return $(f[])
 
 var freeCount = 0
 
-proc freeThing(foo: Foo) =
+proc freeThing(a: ref FooObj) {.procvar, cdecl.} =
   freeCount += 1
 
 proc addKey(i: int) =
-  t.addKey(i, freeThing).v = i
+  let v = (ref FooObj)(v: i)
+  discard t.addKey(i, v, freeThing)
+
+addKey(10)
+GC_fullCollect()
+assert t.len == 0
 
 addKey(1)
-let v2 = t.addKey(2)
-v2.v = 2
+let v2 = t.addKey(2, (ref FooObj)(v: 2))
 assert t.len in {1, 2}
 discard $t
 GC_fullCollect()
 assert t.len == 1
 discard $t
-assert freeCount == 1
+assert freeCount == 2
