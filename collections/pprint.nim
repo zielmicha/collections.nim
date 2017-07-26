@@ -85,7 +85,7 @@ proc pprint*[T](obj: seq[T]): string =
 
 proc pprint*[T](obj: T): string =
   ## Generic pprint implementation
-  when T is object: # and compiles(objFields(obj))
+  when T is object and compiles(objFields(obj)):
     return pprintObject("", obj)
   elif compiles($obj):
     when compiles(obj == nil):

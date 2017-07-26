@@ -172,13 +172,14 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
     # Generate call wrappers
     let wrapper = quote do:
       proc `funcName`*[](self: `nameExpr`): `ret` {.inline.} =
+        assert cast[Interface](self).vtable != nil
         cast[`vtableExpr`](cast[Interface](self).vtable).`funcName`(cast[Interface](self).obj)
 
     for arg in args:
       wrapper[0][3].add(newNimNode(nnkIdentDefs).add(arg[0], arg[1], newEmptyNode()))
 
     for arg in args:
-      wrapper[0][6][0].add(arg[0])
+      wrapper[0][6][1].add(arg[0])
 
     addGenericParams(wrapper[0][2])
     callWrappers.add wrapper
