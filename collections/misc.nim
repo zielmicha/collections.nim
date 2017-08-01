@@ -1,6 +1,4 @@
-import collections/iterate
-import tables
-import options
+import collections/iterate, tables, options, strutils
 
 proc toCounter*[T](values: Iterable[T]): CountTable[T] =
   result = initCountTable[T]()
@@ -32,3 +30,9 @@ proc map*[T](o: Option[T], f: proc(t: T): T): Option[T] =
     return some[T](f(o.get))
   else:
     return o
+
+proc split2*(s: string, sep: string): tuple[k: string, v: string] =
+  let spl = s.split("=", 1)
+  if spl.len < 2:
+    raise newException(ValueError, sep & " not in string")
+  return (spl[0], spl[1])
