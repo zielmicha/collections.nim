@@ -17,6 +17,9 @@ proc default*[T](t: typedesc[T]): T =
 proc initTable*[K, V](t: var Table[K, V]) =
   t = initTable[K, V]()
 
+proc newTable*[K, V](t: var ref Table[K, V]) =
+  t = newTable[K, V]()
+
 # monadic operation for Option[T]
 
 proc flatMap*[T](o: Option[T], f: proc(t: T): Option[T]): Option[T] =
