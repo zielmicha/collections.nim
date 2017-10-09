@@ -268,7 +268,7 @@ proc pprintInterface*[T](self: T): string =
   else:
     result &= " impl " & vtable.typeName
 
-proc isNil*(a: SomeInterface): bool =
+proc isNil*[T: SomeInterface](a: T): bool =
   return a.Interface.vtable == nil
 
 proc implements*(ty: typedesc, superty: typedesc) =
@@ -276,6 +276,6 @@ proc implements*(ty: typedesc, superty: typedesc) =
     if not (ty is superty):
       error(name(ty) & " doesn't implement " & name(superty))
 
-proc getImpl*(iface: SomeInterface): RootRef =
+proc getImpl*[T: SomeInterface](iface: T): RootRef =
   ## Returns implementation object of this interface.
   return iface.Interface.obj
