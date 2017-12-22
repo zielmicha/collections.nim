@@ -37,7 +37,7 @@ proc del*[K, V](self: WeakValueTable[K, V], k: K) =
   del(self.obj.t, k)
 
 proc makeFreeFunc[A, K, V](weakSelf: A, k: K, freeCallback: proc(v: ref V) {.cdecl.}): auto =
-  proc free(arg: ref V) {.cdecl.} =
+  proc free(arg: ref V) =
     if not weakSelf.isAlive: return
     let self = weakSelf.lock().obj
 

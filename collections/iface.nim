@@ -106,13 +106,21 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
       for node in genericParams:
         place.add(newNimNode(nnkIdentDefs).add(node, newNimNode(nnkEmpty), newNimNode(nnkEmpty)))
 
-  let vtableBody = quote do:
+  template shouldBeStmtList(value) =
+    # wrap value in StmtList not already
+    if value.kind != nnkStmtList:
+      value = newNimNode(nnkStmtList).add(value)
+
+  var vtableBody = quote do:
     type `vtableDeclExpr`[] = ptr object of VTableBase
       discard
 
-  let inlineImplBody = quote do:
+  var inlineImplBody = quote do:
     type `inlineImplDeclExpr`[] = ref object of RootObj
       discard
+
+  shouldBeStmtList(vtableBody)
+  shouldBeStmtList(inlineImplBody)
 
   # add generic parameters to type decl
   addGenericParams(vtableBody[0][0][1])
@@ -145,10 +153,11 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
     vtableInner.add(newNimNode(nnkIdentDefs).add(funcName.copyNimTree, vtableProcType, newEmptyNode()))
 
     # Generate vtable body
-    let vtableFunc = quote do:
+    var vtableFunc = quote do:
       res.`funcName` = proc(self: RootRef): void {.cdecl.} =
                            mixin funcName
                            (self.IMPL).funcName() # cast[IMPL](self)
+    shouldBeStmtList(vtableFunc)
 
     let vtableFuncBody = vtableFunc[0][1]
 
@@ -170,10 +179,12 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
     vtableInitBody.add(vtableFunc)
 
     # Generate call wrappers
-    let wrapper = quote do:
+    var wrapper = quote do:
       proc `funcName`*[](self: `nameExpr`): `ret` {.inline.} =
         assert cast[Interface](self).vtable != nil
         cast[`vtableExpr`](cast[Interface](self).vtable).`funcName`(cast[Interface](self).obj)
+
+    shouldBeStmtList(wrapper)
 
     for arg in args:
       wrapper[0][3].add(newNimNode(nnkIdentDefs).add(arg[0], arg[1], newEmptyNode()))
@@ -196,9 +207,11 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
   let converterName = newIdentNode("as" & nameStr)
   vtableInitBody.add(newNimNode(nnkReturnStmt).add(newIdentNode("res")))
 
-  let initVtableForFunc = quote do:
+  var initVtableForFunc = quote do:
     proc initVtableFor[IMPL](impl: typedesc[IMPL], iface: typedesc[`nameExpr`]): `vtableExpr` =
       `vtableInitBody`
+
+  shouldBeStmtList(initVtableForFunc)
 
   addGenericParams(initVtableForFunc[0][2])
 
@@ -230,12 +243,13 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
     let typ = newNimNode(nnkBracketExpr).add(newIdentNode("typedesc"), node)
     converterFunc[0][3].add(newNimNode(nnkIdentDefs).add(genSym(nskParam), typ, newNimNode(nnkEmpty)))
 
-  let getVtableForFunc = quote do:
+  var getVtableForFunc = quote do:
     proc getVtableFor*[IMPL](impl: typedesc[IMPL], t: typedesc[`nameExpr`]): auto {.inline.} =
       # inject is needed of `vtable` will have only one instantation for all generic variants
       var vtable {.global, inject.} = initVtableFor(IMPL, `nameExpr`)
       return vtable
 
+  shouldBeStmtList(getVtableForFunc)
   addGenericParams(getVtableForFunc[0][2])
 
   result = quote do:
