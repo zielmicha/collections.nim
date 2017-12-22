@@ -35,7 +35,7 @@ proc map*[T](o: Option[T], f: proc(t: T): T): Option[T] =
     return o
 
 proc split2*(s: string, sep: string): tuple[k: string, v: string] =
-  let spl = s.split("=", 1)
+  let spl = s.split(sep, 1)
   if spl.len < 2:
     raise newException(ValueError, sep & " not in string")
   return (spl[0], spl[1])

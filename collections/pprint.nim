@@ -26,7 +26,7 @@ proc addFieldsBranch(obj: NimNode, typ: NimNode): NimNode {.compiletime.} =
     elif node.kind == nnkRecCase:
       let recName = $node[0]
       body.add addField(obj, recName)
-      for branch in node[1..^1]:
+      for branch in node[1..<node.len]:
         let value = branch[0]
         let cond = newCall(newIdentNode("=="),
                            newDotExpr(obj, newIdentNode(recName)), value)

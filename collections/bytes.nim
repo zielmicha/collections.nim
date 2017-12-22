@@ -91,7 +91,7 @@ proc decodeHex*(s: string): string =
 # Base64
 
 proc urlsafeBase64Encode*(s: string): string =
-  return base64.encode(s).replace('+', '-').replace('/', '_').strip(chars={'='})
+  return base64.encode(s, newline="").replace('+', '-').replace('/', '_').strip(chars={'='})
 
 proc urlsafeBase64Decode*(s: string): string =
   var d = s.replace('-', '+').replace('_', '/')

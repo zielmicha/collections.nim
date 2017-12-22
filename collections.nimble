@@ -6,4 +6,4 @@ description   = "Various collections and utilities"
 license       = "MIT"
 
 [Deps]
-Requires: "nim >= 0.16.1"
+Requires: "nim >= 0.16.1, < 0.18.0"
