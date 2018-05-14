@@ -3,7 +3,7 @@ import lists, strutils
 
 type
   QueueChunk[T] = object
-    data: seq[T]
+    data: View[T]
     begin: int
     `end`: int
 
@@ -23,9 +23,9 @@ proc len*(queue: Queue): int =
 
 proc appendChunk[T](queue: Queue[T]) =
   queue.list.append(QueueChunk[T](begin: 0, `end`: 0))
-  queue.list.tail.value.data = newSeq[T](queue.chunkSize)
+  queue.list.tail.value.data = newView(T, queue.chunkSize)
 
-proc pushBackMany*[T](queue: Queue[T], items: ConstView[T]) =
+proc pushBackMany*[T](queue: Queue[T], items: View[T]) =
   if queue.list.tail == nil:
     queue.appendChunk()
 
@@ -35,7 +35,7 @@ proc pushBackMany*[T](queue: Queue[T], items: ConstView[T]) =
     let copySize = min(queue.chunkSize - tail.value.`end`, items.len - index)
 
     if copySize != 0:
-      tail.value.data.seqView.slice(tail.value.`end`).copyFrom(items.slice(index, copySize))
+      tail.value.data.slice(tail.value.`end`).copyFrom(items.slice(index, copySize))
       tail.value.`end` += copySize
       queue.size += copySize
       index += copySize
@@ -47,15 +47,15 @@ proc pushBackMany*[T](queue: Queue[T], items: ConstView[T]) =
 
 proc pushBack*[T](queue: Queue[T], item: T) =
   var itemI = item
-  queue.pushBackMany(singleItemView(itemI))
+  queue.pushBackMany(unsafeInitView(addr itemI, 1))
 
-proc peekFrontMany*[T](queue: Queue[T]): ConstView[T] =
+proc peekFrontMany*[T](queue: Queue[T]): View[T] =
   if queue.list.head == nil:
-    return emptyView[T]().viewToConstView
+    return initEmptyView(T)
 
   let head = queue.list.head
 
-  return seqView(head.value.data).slice(head.value.begin, head.value.`end` - head.value.begin).viewToConstView
+  return head.value.data.slice(head.value.begin, head.value.`end` - head.value.begin)
 
 proc popFront*[T](queue: Queue[T], count=1) =
   if count > queue.size:
@@ -70,7 +70,7 @@ proc popFront*[T](queue: Queue[T], count=1) =
     if maxPop == doPop:
       queue.list.remove(queue.list.head)
     else:
-      seqView(head.value.data).slice(head.value.begin, doPop).clearIfReferenceType()
+      head.value.data.slice(head.value.begin, doPop).clearIfReferenceType()
       head.value.begin += doPop
 
 proc `$`*[T](queue: Queue[T]): string =

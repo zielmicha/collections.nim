@@ -1,137 +1,164 @@
-import collections/lang
+## View is a type representing a range of elements in an array. In can be thought as a pointer plus a size.
+## View can be created to an arbitrary memory segment and can additionally keep a single ``ref`` object alive.
+##
+## This module defines views and several helper operations on them. All functions in this module (except for unsafe version of ``initView``) are designed to be memory safe (e.g. they raise exception on out-of-bounds accesses).
 import strutils
+
+const
+  needGcKeep = not (compileOption("gc", "boehm") or compileOption("gc", "none"))
 
 type
   View*[T] = object
-    data*: pointer
-    size*: int
+    data: ptr T
+    length: int
+    when needGcKeep:
+      gcKeep: RootRef
 
-  ConstView*[T] = object
-    data*: pointer
-    size*: int
-
-  SomeView*[T] = View[T] | ConstView[T]
-
+  Buffer* = View[byte]
   ByteView* = View[byte]
 
-proc emptyView*[T](): View[T] =
-  result.data = nil
-  result.size = 0
+{.deprecated: [ConstView: View].}
 
-proc singleItemView*[T](item: var T): View[T] =
-  View[T](data: addr item, size: 1)
+proc unsafeInitView*[T; R: ref](data: ptr T, len: int, gcKeep: R): View[T] =
+  ## Creates a new view pointing, starting at ``data`` with length ``len``.
+  ##
+  ## ``gcKeep`` should be a pointer to the underlying GC objects that contains these items.
+  when needGcKeep:
+    return View[T](data: data, length: len, gcKeep: cast[RootRef](gcKeep))
+  else:
+    return View[T](data: data, length: len)
 
-proc seqView*[T](s: var seq[T]): View[T] =
-  result.data = addr s[0]
-  result.size = s.len
+proc unsafeInitView*[T](data: ptr T, len: int): View[T] =
+  ## Creates a new view, starting at ``data`` with length ``len``.
+  ##
+  ## You need to ensure that data pointed by this view is not garbage collected while using the view.
+  when needGcKeep:
+    return View[T](data: data, length: len, gcKeep: nil)
+  else:
+    return View[T](data: data, length: len)
 
-proc stringView*(s: var string): View[byte] =
-  result.data = addr s[0]
-  result.size = s.len
+proc unsafeInitView*[T](data: var seq[T]): View[T] =
+  return unsafeInitView(addr data[0], data.len)
 
-proc addrView*(s: cstring, size: int): View[byte] =
-  result.data = cast[pointer](s)
-  result.size = size
+proc unsafeInitView*(data: var string): View[char] =
+  return unsafeInitView(addr data[0], data.len)
 
-proc asView*(s: var string): auto = stringView(s)
+proc initEmptyView*[T](typ: typedesc[T]): View[T] =
+  ## Creates a view of length zero.
+  return unsafeInitView[T](nil, 0)
 
-proc asUnsafeView*(s: string): auto = addrView(s, s.len)
+proc initView[T](s: ref seq[T]): View[T] =
+  ## Returns a view into a sequence.
+  if s[].len == 0:
+    initEmptyView(T)
+  else:
+    unsafeInitView(addr s[0], s[].len, gcKeep=s)
 
-proc asView*(s: var seq): auto = seqView(s)
+proc newView*[T](s: seq[T]): View[T] =
+  ## Copies a sequence and returns a new view pointing into the copy.
+  let copied = new(seq[T])
+  copied[] = s
+  result = initView(copied)
 
-template asByteView*(s): ByteView =
-  ByteView(data: s[0].unsafeAddr, size: s.len)
-
-converter viewToConstView*[T](v: View[T]): ConstView[T] =
-  result.data = v.data
-  result.size = v.size
+proc newView*[T](typ: typedesc[T], len: int): View[T] =
+  ## Create uninitialized view of length ``len``.
+  let s = new(seq[T])
+  s[] = newSeq[T](len)
+  result = initView(s)
 
 proc isNil*(v: View): bool =
-  return v.data == nil
+  return v.len == 0
 
 proc len*(v: View): int =
-  v.size
-
-proc len*(v: ConstView): int =
-  v.size
-
-proc asPointer*[T](v: SomeView[T]): ptr T =
-  cast[ptr T](v.data)
+  return v.length
 
 proc ptrAdd[T](p: pointer, i: int): ptr T =
   return cast[ptr T](cast[int](p) +% (i * sizeof(T)))
 
-proc `[]`*[T](v: ConstView[T], i: int): T =
-  doAssert(i >= 0 and i < v.size)
-  return ptrAdd[T](v.data, i)[]
-
 proc `[]`*[T](v: View[T], i: int): var T =
-  doAssert(i >= 0 and i < v.size)
+  doAssert(i >= 0 and i < v.len)
   return ptrAdd[T](v.data, i)[]
 
 proc `[]=`*[T](v: View[T], i: int, val: T) =
-  doAssert(i >= 0 and i < v.size)
+  doAssert(i >= 0 and i < v.len)
   ptrAdd[T](v.data, i)[] = val
 
-proc slice*[T](v: SomeView[T], start: int, size: int): SomeView[T] =
-  if size != 0:
+proc slice*[T](v: View[T], start: int, len: int): View[T] =
+  ## Returns a subview starting at ``v[start]`` with length ``len``.
+  if len != 0:
     doAssert(start < v.len and start >= 0)
-    doAssert(start + size <= v.len)
-    doAssert(size >= 0)
+    doAssert(len <= v.len)
+    doAssert(start + len <= v.len)
+    doAssert(len >= 0)
     result.data = ptrAdd[T](v.data, start)
-    result.size = size
+    result.length = len
+    when needGcKeep:
+      result.gcKeep = v.gcKeep
   else:
     result.data = nil
-    result.size = 0
+    result.length = 0
 
-proc slice*[T](v: SomeView[T], start: int): SomeView[T] =
+proc slice*[T](v: View[T], start: int): View[T] =
+  ## Returns a subview starting at ``v[start]`` with length ``v.len - start``.
   assert start <= v.len and start >= 0
   return v.slice(start, v.len - start)
 
+# Types that may be safely copied using ``copyMem``.
 type ScalarType = uint8 | uint16 | uint32 | uint64 | int8 | int16 | int32 | int64 | float32 | float64 | byte | char | enum
 
-proc copyFrom*[T](dst: View[T], src: SomeView[T]) =
-  assert dst.size >= src.size
+proc copyFrom*[T](dst: View[T], src: View[T]) =
+  ## Copies content of ``src`` into ``dst``. ``dst.len`` needs to be larger than ``src.len``.
+  doAssert(dst.len >= src.len)
   when T is ScalarType:
-    copyMem(dst.data, src.data, src.size * sizeof(T))
+    copyMem(dst.data, src.data, src.len * sizeof(T))
   else:
-    for i in 0..<src.size:
+    for i in 0..<src.len:
       ptrAdd[T](dst.data, i)[] = ptrAdd[T](src.data, i)[]
 
-proc copyTo*[T](src: SomeView[T], dst: View[T]) =
+proc copyTo*[T](src: View[T], dst: View[T]) =
+  ## Copies content of ``src`` into ``dst``. ``dst.len`` needs to be larger than ``src.len``.
   dst.copyFrom(src)
 
-proc copyAsSeq*[T](src: ConstView[T]): seq[T] =
+proc copyAsSeq*[T](src: View[T]): seq[T] =
+  ## Copies content of ``src`` into a new sequence and returns it.
   result = newSeq[T](src.len)
-  src.copyTo(result.seqView)
+  src.copyTo(initView(addr result[0], result.len))
 
-proc copyAsString*(src: SomeView[byte]): string =
-  result = newString(src.len)
-  src.copyTo(result.stringView)
-
-proc copyAs*[R, T](src: SomeView[R], t: typedesc[T]): T =
-  when t is seq:
-    return copyAsSeq[R](src)
-  else:
-    return copyAsString(src)
-
-iterator items*[T](src: SomeView[T]): T =
+iterator items*[T](src: View[T]): T =
+  ## Iterate over the content of ``src``.
   for i in 0..<src.len:
     yield src[i]
 
-proc `$`*[T](v: SomeView[T]): string =
+proc `$`*[T](v: View[T]): string =
   return "View[$1, $2]" % [$v.len, $v.copyAsSeq]
 
-proc clearIfReferenceType*[T](view: SomeView[T]) =
+# ByteView
+
+converter toByteView*(s: View[char]): ByteView =
+  # View[char] and View[byte] are mostly the same thing
+  return unsafeInitView(cast[ptr byte](s.data), s.len, when needGcKeep: s.gcKeep else: nil)
+
+proc initView(s: ref string): ByteView =
+  ## Returns a view into a string.
+  if s[].len == 0:
+    initEmptyView(byte)
+  else:
+    unsafeInitView(addr s[0], s[].len, gcKeep=s)
+
+proc newView*(s: string): ByteView =
+  ## Copies a string and returns a new view pointing into the copy.
+  let copied = new(string)
+  copied[] = s
+  result = initView(copied)
+
+proc copyAsString*(src: ByteView): string =
+  ## Copies content of ``src`` into a new string and returns it.
+  result = newString(src.len)
+  src.copyTo(unsafeInitView(addr result[0], result.len))
+
+proc clearIfReferenceType*[T](view: View[T]) =
   ## Clears `view` if it contains GC type
   when not (T is ScalarType):
-    for i in 0..<view.size:
-      ptrAdd[T](view.data, i)[] = defaultVal(T)
-
-proc alignedStringView*(s: var string, align=16): ByteView =
-  ## Return view into string ``s``. Align it to ``align`` bytes if needed.
-  let misaligned = cast[int](addr s[0]) mod align
-  if misaligned != 0:
-    s = " ".repeat(align - misaligned) & s
-    return s.stringView.slice(align - misaligned)
-  return s.stringView
+    var defVal: T
+    for i in 0..<view.length:
+      ptrAdd[T](view.data, i)[] = defVal

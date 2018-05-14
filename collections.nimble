@@ -1,9 +1,7 @@
-[Package]
-name          = "collections"
-version       = "0.3.4"
+version       = "0.4.0"
 author        = "Michał Zieliński <michal@zielinscy.org.pl>"
 description   = "Various collections and utilities"
 license       = "MIT"
+skipDirs      = @["examples", "doc", "tests"]
 
-[Deps]
-Requires: "nim >= 0.18.0"
+requires "nim >= 0.18.0"
