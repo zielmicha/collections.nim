@@ -27,6 +27,11 @@ template returnMaybeVoid*(e: typed): untyped =
   else:
     return e
 
+proc toArray*[T](a: seq[T], s: static[int]): array[s, T] =
+  doAssert a.len == s
+  for i in 0..<s:
+    result[i] = a[i]
+
 proc newCopy*[T](t: T): ref T =
   new(result)
   result[] = t

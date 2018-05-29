@@ -66,6 +66,12 @@ proc newView*[T](typ: typedesc[T], len: int): View[T] =
   s[] = newSeq[T](len)
   result = initView(s)
 
+proc newBuffer*(len: int): Buffer = return newView(byte, len)
+
+proc copyData*[T](v: View[T]): View[T] =
+  result = newView(T, v.len)
+  result.copyFrom(v)
+
 proc isNil*(v: View): bool =
   return v.len == 0
 
@@ -122,15 +128,12 @@ proc copyTo*[T](src: View[T], dst: View[T]) =
 proc copyAsSeq*[T](src: View[T]): seq[T] =
   ## Copies content of ``src`` into a new sequence and returns it.
   result = newSeq[T](src.len)
-  src.copyTo(initView(addr result[0], result.len))
+  src.copyTo(unsafeInitView(addr result[0], result.len))
 
 iterator items*[T](src: View[T]): T =
   ## Iterate over the content of ``src``.
   for i in 0..<src.len:
     yield src[i]
-
-proc `$`*[T](v: View[T]): string =
-  return "View[$1, $2]" % [$v.len, $v.copyAsSeq]
 
 # ByteView
 
@@ -138,7 +141,24 @@ converter toByteView*(s: View[char]): ByteView =
   # View[char] and View[byte] are mostly the same thing
   return unsafeInitView(cast[ptr byte](s.data), s.len, when needGcKeep: s.gcKeep else: nil)
 
-proc initView(s: ref string): ByteView =
+proc copyAsString*(src: ByteView): string =
+  ## Copies content of ``src`` into a new string and returns it.
+  result = newString(src.len)
+  src.copyTo(unsafeInitView(addr result[0], result.len))
+
+proc `$`*[T](v: View[T]): string =
+  when T is byte or T is char:
+    result = "View[" & $(v.len) & ", "
+    for ch in v.copyAsString:
+      if ch.isAlpha or ch.isDigit:
+        result &= $ch
+      else:
+        result &= "\\x" & toHex(ch.int, 2)
+    result &= "]"
+  else:
+    return "View[$1, $2]" % [$v.len, $v.copyAsSeq]
+
+proc initView*(s: ref string): ByteView =
   ## Returns a view into a string.
   if s[].len == 0:
     initEmptyView(byte)
@@ -151,14 +171,23 @@ proc newView*(s: string): ByteView =
   copied[] = s
   result = initView(copied)
 
-proc copyAsString*(src: ByteView): string =
-  ## Copies content of ``src`` into a new string and returns it.
-  result = newString(src.len)
-  src.copyTo(unsafeInitView(addr result[0], result.len))
-
 proc clearIfReferenceType*[T](view: View[T]) =
   ## Clears `view` if it contains GC type
   when not (T is ScalarType):
     var defVal: T
     for i in 0..<view.length:
       ptrAdd[T](view.data, i)[] = defVal
+
+type MallocWrapper = ref object
+  mem: pointer
+
+proc c_free(m: pointer) {.importc: "free", header: "<string.h>".}
+
+proc freeMallocWrapper(m: MallocWrapper) =
+  c_free(m.mem)
+
+proc initViewWithMallocMemory*[T](data: ptr T, length: int): View[T] =
+  var wrapper: MallocWrapper
+  new(wrapper, freeMallocWrapper)
+  wrapper.mem = cast[pointer](data)
+  return unsafeInitView(data, length, wrapper)

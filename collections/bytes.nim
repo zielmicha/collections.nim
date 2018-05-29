@@ -1,4 +1,4 @@
-import endians, strutils, base64
+import endians, strutils, base64, collections/views
 
 proc byteArray*(data: string, size: static[int]): array[size, byte] =
   ## Converts a string to a bytearray.
@@ -11,6 +11,9 @@ proc toBinaryString*[T: array](s: T): string =
   const size = s.high - s.low + 1
   result = newString(size)
   copyMem(result.cstring, unsafeAddr(s), size)
+
+#converter toBinaryStringConv*[size: static[int]](s: array[size, byte]): string =
+#  return toBinaryString(s)
 
 proc setAt*(s: var string, at: int, data: string) =
   ## Put ``data`` at position ``at`` of string ``s``.
@@ -41,13 +44,13 @@ proc convertEndian(size: static[int], dst: pointer, src: pointer, endian=bigEndi
       else:
         {.error: "Unsupported size".}
 
-proc pack*[T](v: T, endian: Endianness): string {.inline.} =
-  ## Converts scalar `v` into a binary string with specific endianness.
+proc pack*[T](v: T, endian: Endianness=littleEndian): string {.inline.} =
+  ## Converts scalar `v` into a binary string with a specific endianness.
   result = newString(sizeof(v))
   convertEndian(sizeof(T), addr result[0], unsafeAddr v, endian=endian)
 
-proc unpack*[T](v: string, t: typedesc[T], endian: Endianness): T {.inline.} =
-  ## Converts binary string to scalar type `t` with specific endianness.
+proc unpack*[T](v: string|Buffer, t: typedesc[T], endian: Endianness=littleEndian): T {.inline.} =
+  ## Converts binary string to scalar type `t` with a specific endianness.
   if v.len < sizeof(T):
     raise newException(ValueError, "buffer too small")
   convertEndian(sizeof(T), addr result, unsafeAddr v[0], endian)
