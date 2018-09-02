@@ -245,7 +245,7 @@ macro interfaceMethods*(nameExpr: untyped, body: untyped): untyped =
 
   var getVtableForFunc = quote do:
     proc getVtableFor*[IMPL](impl: typedesc[IMPL], t: typedesc[`nameExpr`]): auto {.inline.} =
-      # inject is needed of `vtable` will have only one instantation for all generic variants
+      # inject is needed or `vtable` will have only one instantation for all generic variants
       var vtable {.global, inject.} = initVtableFor(IMPL, `nameExpr`)
       return vtable
 

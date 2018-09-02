@@ -45,11 +45,8 @@ proc flatten*[T](a: seq[seq[T]]): seq[T] =
   for subseq in a:
     result &= subseq
 
-proc nilToEmpty*(a: string): string =
-  if a == nil:
-    return ""
-  else:
-    return a
+proc nilToEmpty*(a: string): string {.deprecated.} =
+  return a
 
 template forwardRefImpl*(ty, tyImpl) =
   ## Marks type `tyImpl` as implementation of forward reference type

@@ -67,7 +67,6 @@ proc pprintObject[T](prefix: string, obj: T): string =
   return pprintPairs(prefix & name(T), objFields(obj))
 
 proc pprint*(obj: string): string =
-  if obj == nil: return "nil"
   result = "\""
   for ch in obj:
     # TODO

@@ -37,6 +37,9 @@ proc unsafeInitView*[T](data: ptr T, len: int): View[T] =
   else:
     return View[T](data: data, length: len)
 
+proc unsafeInitView*[T](data: View[T]): View[T] =
+  return data
+
 proc unsafeInitView*[T](data: var seq[T]): View[T] =
   return unsafeInitView(addr data[0], data.len)
 

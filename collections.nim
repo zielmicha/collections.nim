@@ -7,5 +7,5 @@ export future.`=>`, future.`->`
 import options
 export options
 
-import tables, strutils
-export tables, strutils
+import tables, strutils, strformat
+export tables, strutils, strformat

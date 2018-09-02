@@ -174,7 +174,7 @@ proc someTrue*(i: Iterable[bool]): bool =
   for item in i:
     result = result or item
 
-template iteratorToSeq*(iter: untyped): expr =
+template iteratorToSeq*(iter: untyped): untyped =
   var res: seq[type(iter)] = @[]
   for x in iter:
     res.add(x)
