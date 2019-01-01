@@ -71,7 +71,7 @@ proc parseInterfaceBody(body: NimNode): seq[InterfaceFunc] {.compiletime.} =
     elif arg.kind == nnkCommentStmt:
       discard
     else:
-      error("invalid statement in interface specification")
+      error("invalid statement in interface specification ($2: $1)" % [arg.repr, $arg.kind])
 
 proc parseInterfaceName(nameExpr: NimNode): tuple[nameStr: string, genericParams: seq[NimNode]] =
   var genericParams: seq[NimNode] = @[]
