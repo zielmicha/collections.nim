@@ -44,6 +44,8 @@ proc unsafeInitView*[T](data: var seq[T]): View[T] =
   return unsafeInitView(addr data[0], data.len)
 
 proc unsafeInitView*(data: var string): View[char] =
+  if data.len == 0:
+    return unsafeInitView[char](nil, 0)
   return unsafeInitView(addr data[0], data.len)
 
 proc initEmptyView*[T](typ: typedesc[T]): View[T] =
@@ -130,6 +132,7 @@ proc copyTo*[T](src: View[T], dst: View[T]) =
 
 proc copyAsSeq*[T](src: View[T]): seq[T] =
   ## Copies content of ``src`` into a new sequence and returns it.
+  if src.len == 0: return @[]
   result = newSeq[T](src.len)
   src.copyTo(unsafeInitView(addr result[0], result.len))
 
@@ -144,8 +147,9 @@ converter toByteView*(s: View[char]): ByteView =
   # View[char] and View[byte] are mostly the same thing
   return unsafeInitView(cast[ptr byte](s.data), s.len, when needGcKeep: s.gcKeep else: nil)
 
-proc copyAsString*(src: ByteView): string =
+converter copyAsString*(src: ByteView): string =
   ## Copies content of ``src`` into a new string and returns it.
+  if src.len == 0: return ""
   result = newString(src.len)
   src.copyTo(unsafeInitView(addr result[0], result.len))
 
@@ -153,7 +157,7 @@ proc `$`*[T](v: View[T]): string =
   when T is byte or T is char:
     result = "View[" & $(v.len) & ", "
     for ch in v.copyAsString:
-      if ch.isAlpha or ch.isDigit:
+      if ch.isAlphaAscii or ch.isDigit:
         result &= $ch
       else:
         result &= "\\x" & toHex(ch.int, 2)
@@ -168,7 +172,7 @@ proc initView*(s: ref string): ByteView =
   else:
     unsafeInitView(addr s[0], s[].len, gcKeep=s)
 
-proc newView*(s: string): ByteView =
+converter newView*(s: string): ByteView =
   ## Copies a string and returns a new view pointing into the copy.
   let copied = new(string)
   copied[] = s
