@@ -45,6 +45,18 @@ proc flatten*[T](a: seq[seq[T]]): seq[T] =
   for subseq in a:
     result &= subseq
 
+proc remove*[T](a: var seq[T], item: T): bool {.discardable.} =
+  let ind = find(a, item)
+  if ind == -1:
+    return false
+  else:
+    a.delete(ind)
+    return true
+
+proc reverse*(a: var string) =
+  for i in 0..<(a.len div 2):
+    swap a[i], a[a.len - i - 1]
+
 proc nilToEmpty*(a: string): string {.deprecated.} =
   return a
 
@@ -83,3 +95,41 @@ macro bindOnlyVars*(vars: untyped, code: untyped): untyped =
   for arg in vars:
     call.add(arg)
   return call
+
+macro partial*(body: untyped): untyped =
+  var body = body
+  if body.kind != nnkCall:
+    error("partial() expects a function call")
+
+  result = newNimNode(nnkLambda)
+  let params = newNimNode(nnkFormalParams)
+
+  params.add(newIdentNode("auto"))
+
+  proc walk(item: NimNode): NimNode =
+    if item.kind == nnkIdent and $item == "_":
+      let s = genSym(nskParam, "x")
+      params.add(newNimNode(nnkIdentDefs).add(
+        s,
+        newIdentNode("auto"),
+        newNimNode(nnkEmpty)
+      ))
+      return s
+    else:
+      for i in 0..<len(item):
+        item[i] = walk(item[i])
+      return item
+
+  body = walk(body)
+
+  result.add(
+    newNimNode(nnkEmpty),
+    newNimNode(nnkEmpty),
+    newNimNode(nnkEmpty),
+    params,
+    newNimNode(nnkEmpty),
+    newNimNode(nnkEmpty),
+    body,
+  )
+
+  result.repr.echo
