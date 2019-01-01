@@ -1,5 +1,7 @@
 import macros
 
+# Small utilities
+
 proc newTypeInstance*(typ: NimNode, args: seq[NimNode]): NimNode =
   # returns typ[args]
   if args.len == 0:
@@ -54,3 +56,36 @@ proc `[]`*(node: NimNode, s: Slice): seq[NimNode] =
   result = @[]
   for i in s:
     result.add(node[i])
+
+#
+
+proc getFieldNames*(t: NimNode): seq[string] =
+  var res = t.getType
+
+  if res.kind == nnkBracketExpr and $res[0] == "typeDesc":
+    res = res[1]
+
+  if res.kind == nnkBracketExpr and $res[0] == "ref":
+    res = res[1].getType
+
+  if res.kind == nnkSym:
+    for item in res.getImpl[2][2]:
+      result.add $(stripPublic(item[0]))
+  else:
+    assert res.kind == nnkObjectTy
+    for item in res[2]:
+      result.add $item
+
+when isMainModule:
+  macro printFieldNames(t: typed): untyped =
+    for name in getFieldNames(t):
+      echo name
+
+  type
+    T1 = object
+      a: int
+      b: string
+
+  var t1: T1
+  printFieldNames(t1)
+  printFieldNames(T1)
