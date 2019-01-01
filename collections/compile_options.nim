@@ -19,3 +19,5 @@ switch("hint.XDeclaredButNotUsed", "off")
 switch("obj_checks", "on")
 switch("field_checks", "on")
 switch("bound_checks", "on")
+
+switch("debugger", "native")
