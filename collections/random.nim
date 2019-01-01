@@ -10,6 +10,7 @@ proc urandom*(len: int): string =
   if actualRead != len:
     raise newException(IOError, "cannot read random bytes")
 
-proc hexUrandom*(len: int): string =
+proc hexUrandom*(len: int=16): string =
   ## Generate secure hex random string of length 2*len.
+  ## The default length is 16, so this method is unlikely to return same value twice.
   urandom(len).encodeHex
